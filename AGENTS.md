@@ -16,7 +16,7 @@ Da root, Rust stable recente (edition 2024); su MiniPC eseguire build e test:
 
 ```sh
 cargo test --workspace --locked --no-default-features
-cargo build --release --locked --no-default-features
+cargo build --release --locked --no-default-features --workspace
 ./target/release/muxin --version
 ./target/release/muxin mcp --print-config
 ./target/release/muxen-agent --version
