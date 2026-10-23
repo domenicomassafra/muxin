@@ -49,6 +49,8 @@ export function GuacamoleSession({ desktop, onDisconnect }: {
       keyboard.onkeydown = (key) => client.sendKeyEvent(1, key);
       keyboard.onkeyup = (key) => client.sendKeyEvent(0, key);
     }
+    const focusDisplay = () => element.focus();
+    if (desktop.capabilities.input) element.addEventListener("pointerdown", focusDisplay);
     if (desktop.capabilities.clipboard) {
       client.onclipboard = (stream, mime) => {
         if (mime !== "text/plain") return;
@@ -72,6 +74,7 @@ export function GuacamoleSession({ desktop, onDisconnect }: {
         keyboard.onkeydown = null;
         keyboard.onkeyup = null;
       }
+      element.removeEventListener("pointerdown", focusDisplay);
       if (mouse) mouse.onEach(["mousedown", "mouseup", "mousemove"], () => {});
       client.disconnect();
       if (clientRef.current === client) clientRef.current = null;
