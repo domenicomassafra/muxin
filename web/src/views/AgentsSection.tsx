@@ -38,7 +38,7 @@ export function AgentsSection() {
           {visited.has("sessions") && <AgentsSignoriView />}
         </section>
         <section hidden={subView !== "desktop"} aria-label="Desktop autorizzati">
-          {visited.has("desktop") && <RemoteDesktopView />}
+          {visited.has("desktop") && <RemoteDesktopView active={subView === "desktop"} />}
         </section>
       </div>
     </div>

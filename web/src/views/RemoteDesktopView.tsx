@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { adapterMessage, getRemoteDesktops, type RemoteDesktop } from "../lib/agents-remoting";
+import { GuacamoleSession } from "./GuacamoleSession";
 
 type Inventory =
   | { state: "loading" }
@@ -13,11 +14,16 @@ const statusText: Record<RemoteDesktop["state"], string> = {
   ready: "Disponibile secondo il server",
 };
 
-export function RemoteDesktopView() {
+export function RemoteDesktopView({ active = true }: { active?: boolean }) {
   const [refresh, setRefresh] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
   const [inventory, setInventory] = useState<Inventory>({ state: "loading" });
 
   useEffect(() => {
+    if (!active) {
+      setSelected(null);
+      return;
+    }
     const controller = new AbortController();
     getRemoteDesktops(fetch, controller.signal)
       .then(({ status, desktops }) => {
@@ -27,7 +33,11 @@ export function RemoteDesktopView() {
         if (!controller.signal.aborted) setInventory({ state: "error", message: adapterMessage(error) });
       });
     return () => controller.abort();
-  }, [refresh]);
+  }, [refresh, active]);
+
+  const authorized = inventory.state === "ready" ? inventory.desktops.find(
+    (desktop) => desktop.id === selected && desktop.state === "ready" && desktop.capabilities.view,
+  ) : undefined;
 
   return (
     <div className="space-y-5">
@@ -49,8 +59,8 @@ export function RemoteDesktopView() {
       {inventory.state === "ready" && (
         <>
           <p role="status" className="rounded-xl border border-ink-700 bg-ink-900 p-4 text-sm text-ink-300">
-            Stato del servizio: {statusText[inventory.status]}. Il client interattivo richiede
-            l'adapter owner e Apache Guacamole 1.6.0 con autorizzazioni provate; qui non si apre alcun canale di input.
+            Stato del servizio: {statusText[inventory.status]}. Video, input e clipboard sono
+            disponibili esclusivamente per i permessi confermati dal backend owner.
           </p>
           {inventory.desktops.length === 0
             ? <p className="text-sm text-ink-400">Nessun desktop autorizzato restituito dal server.</p>
@@ -68,12 +78,17 @@ export function RemoteDesktopView() {
                     <div><dt>Input</dt><dd className="mt-1 text-ink-200">{desktop.capabilities.input ? "Concesso" : "Non concesso"}</dd></div>
                     <div><dt>Clipboard</dt><dd className="mt-1 text-ink-200">{desktop.capabilities.clipboard ? "Concesso" : "Non concesso"}</dd></div>
                   </dl>
-                  <p className="mt-3 text-xs leading-5 text-ink-500">
-                    Connessione interattiva in attesa di integrazione del viewer Guacamole e prova su desktop isolato.
-                  </p>
+                  {active && desktop.state === "ready" && desktop.capabilities.view && (
+                    <button type="button" className="button-secondary mt-3 min-h-11"
+                      disabled={selected === desktop.id} onClick={() => setSelected(desktop.id)}>
+                      {selected === desktop.id ? "Sessione selezionata" : "Connetti al desktop"}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>}
+          {authorized && active && <GuacamoleSession key={authorized.id} desktop={authorized}
+            onDisconnect={() => setSelected(null)} />}
         </>
       )}
     </div>

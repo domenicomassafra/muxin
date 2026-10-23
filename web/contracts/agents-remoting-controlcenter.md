@@ -89,14 +89,16 @@ missing/ignoto/grant missing fa fallire chiuso il client. L'input richiede
 `view`; un target non allowlisted va negato prima del dial. Mai host/porta,
 password o token nel payload.
 
-Il WebSocket esistente WIP `WS /api/v1/desktops/{id}/tunnel` necessita guard
-owner-session/Tailscale/Origin già presente, allowlist server, bounded frame,
-limite/rate di input, chiusura esplicita, separazione per capability delle
-istruzioni clipboard/mouse/tastiera e health del proxy. Guacd **non autentica**;
-tenere porta privata su loopback. La UI viewer ufficiale
-`@pelotech/guacamole-common-js@1.6.0` (Apache-2.0) va portata soltanto nella
-fase autorizzata, serializzando le modifiche a package/lock con #20.
-Nessuna dipendenza Guacamole o sorgente WIP è stata copiata in questa PR.
+L'integrazione #17 aggiunge in ControlCenter il tunnel
+`WS /api/v1/desktops/{id}/tunnel` con guard owner-session/Tailscale/Origin,
+cookie CSRF, allowlist server, frame limitati, rate di input e capability
+separate per clipboard/mouse/tastiera. Guacd **non autentica**, pertanto
+resta legato soltanto al loopback. Il viewer Plancia usa il repack
+`@pelotech/guacamole-common-js@1.6.0` (Apache-2.0) senza patch donor; si
+monta su un click esplicito per un target `ready` e con `view: true`, invia
+input/clipboard soltanto se concessi e chiude il tunnel quando cambia vista.
+Il codice versionato non equivale alla release MiniPC: le prove runtime
+isolate sono registrate nella checklist ControlCenter #484.
 
 Test backend necessari: 401 anonimo, 403 Origin/grant non valido, ID non
 allowlisted senza tentativo di socket, CSRF/cookie nell'upgrade, frame e
