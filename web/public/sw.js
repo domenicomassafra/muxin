@@ -57,6 +57,7 @@ self.addEventListener('fetch', (event) => {
     const type = response.headers.get('Content-Type') || '';
     const expectedType = request.destination === 'script' ? /javascript/i : /text\/css/i;
     if (response.ok && response.type === 'basic' && expectedType.test(type) &&
+        /(?:^|,)\s*public(?:\s*,|\s*$)/i.test(cacheControl) &&
         !/no-store|private/i.test(cacheControl)) {
       await cache.put(request, response.clone());
     }

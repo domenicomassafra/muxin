@@ -7,6 +7,7 @@ import { runInNewContext } from 'node:vm';
 const publicDir = join(import.meta.dirname, '..', 'public');
 const manifest = JSON.parse(readFileSync(join(publicDir, 'manifest.webmanifest'), 'utf8'));
 const worker = readFileSync(join(publicDir, 'sw.js'), 'utf8');
+const index = readFileSync(join(publicDir, '..', 'index.html'), 'utf8');
 
 function runtime(fetchImpl = async () => ({
   ok: true,
@@ -55,11 +56,34 @@ test('manifest starts at the hash-routed shell and has 192/512 PNG icons', () =>
   for (const size of [192, 512]) {
     const icon = manifest.icons.find((item) => item.sizes === `${size}x${size}`);
     assert.equal(icon?.type, 'image/png');
+    assert.match(icon.src, /^\/assets\/plancia-icon-(192|512)\.png$/);
     const png = readFileSync(join(publicDir, icon.src.replace(/^\//, '')));
     assert.equal(png.subarray(1, 4).toString(), 'PNG');
     assert.equal(png.readUInt32BE(16), size);
     assert.equal(png.readUInt32BE(20), size);
   }
+});
+
+test('PWA HTML, icons and registration match the existing ControlCenter static route allowlist', () => {
+  // Current owner backend server.py serves /manifest.webmanifest, /plancia-icon.svg,
+  // and /assets/* with a suffix allowlist. It does NOT yet serve /sw.js.
+  assert.match(index, /<title>Plancia<\/title>/);
+  assert.match(index, /name="theme-color" content="#111111"/);
+  assert.match(index, /src="\/assets\/pwa-register\.js"/);
+  assert.match(index, /href="\/assets\/plancia-icon-192\.png"/);
+  assert.match(index, /href="\/plancia-icon\.svg"/);
+  assert.match(index, /href="\/manifest\.webmanifest"/);
+
+  const allowedAssets = /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|png|svg)$/;
+  assert.match('/assets/pwa-register.js', allowedAssets);
+  for (const icon of manifest.icons) {
+    assert.ok(allowedAssets.test(icon.src) || icon.src === '/plancia-icon.svg', icon.src);
+  }
+  const register = readFileSync(join(publicDir, 'assets', 'pwa-register.js'), 'utf8');
+  assert.match(register, /serviceWorker\.register\('\/sw\.js',\s*\{\s*scope:\s*'\/'\s*\}\)/);
+  assert.match(register, /location\.protocol === 'https:'|location\.hostname === 'localhost'/);
+  assert.match(worker, /const CACHE_NAME/);
+  // Root scope requires the pending, external ControlCenter /sw.js route.
 });
 
 test('API, sessions, documents, icons and other origins never enter Cache Storage', () => {
@@ -91,7 +115,7 @@ test('offline root gets a neutral notice, never cached authenticated HTML', asyn
 
 test('only public fingerprinted JavaScript/CSS with public caching headers are cached', async () => {
   let response = {
-    ok: true, type: 'basic', headers: new Headers({ 'Content-Type': 'text/javascript' }),
+    ok: true, type: 'basic', headers: new Headers({ 'Content-Type': 'text/javascript', 'Cache-Control': 'public, max-age=31536000, immutable' }),
     clone() { return this; },
   };
   const { dispatch, stored } = runtime(async () => response);
@@ -102,6 +126,10 @@ test('only public fingerprinted JavaScript/CSS with public caching headers are c
   response = { ...response, headers: new Headers({ 'Content-Type': 'text/css', 'Cache-Control': 'private, no-store' }) };
   await dispatch(css, { destination: 'style' });
   assert.equal(stored.size, 1);
+  const unmarked = 'https://plancia.example.test/assets/extra-hashed123.js';
+  response = { ...response, headers: new Headers({ 'Content-Type': 'text/javascript' }) };
+  await dispatch(unmarked, { destination: 'script' });
+  assert.equal(stored.size, 1, 'Only explicitly public assets may be cached');
   const json = 'https://plancia.example.test/assets/apiData-abc12345.js';
   response = { ...response, headers: new Headers({ 'Content-Type': 'application/json' }) };
   await dispatch(json, { destination: 'script' });
