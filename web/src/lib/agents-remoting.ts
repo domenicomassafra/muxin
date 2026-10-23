@@ -42,6 +42,22 @@ export type HermesMessage = {
   timestamp: string | null;
 };
 
+/** Admission stays bound to the native Hermes gateway and original session. */
+export type HermesLease = {
+  profileId: string;
+  sessionId: string;
+  instanceId: string;
+  authorityEpoch: number;
+};
+
+export type HermesAdmission = HermesLease & {
+  admissionId: string;
+  status: "queued" | "started" | "unknown" | "terminal";
+};
+
+/** Supply the same-origin `request` from api.ts to include session and CSRF. */
+export type HermesWriteRequester = <T>(path: string, init?: RequestInit) => Promise<T>;
+
 export type RemoteDesktop = {
   id: string;
   name: string;
@@ -58,6 +74,7 @@ const MAX_PROFILES = 24;
 const MAX_SESSIONS = 20;
 const MAX_MESSAGES = 50;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+const NONCE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
 
 function invalid(): never {
   throw new AdapterError("invalid_contract");
@@ -179,6 +196,55 @@ export async function getHermesMessages(
     timestamp: nullableText(item.timestamp, 60),
   }));
   return { messages };
+}
+
+function gatewayEpoch(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value : invalid();
+}
+
+function nativeLease(raw: unknown, profileId: string, sessionId: string): HermesLease {
+  const body = object(raw);
+  source(body, "hermes-native");
+  if (body.profile_id !== profileId || body.session_id !== sessionId) invalid();
+  return {
+    profileId, sessionId,
+    instanceId: identifier(body.instance_id),
+    authorityEpoch: gatewayEpoch(body.authority_epoch),
+  };
+}
+
+/** Never attach unless the owner backend explicitly advertises the native grant. */
+export async function attachHermesSession(
+  profile: HermesProfile, session: HermesSession, requester: HermesWriteRequester,
+): Promise<HermesLease> {
+  if (profile.gateway !== "running" || profile.capabilities.attachable !== true) {
+    throw new AdapterError("permission_denied");
+  }
+  const path = `/api/v1/hermes/profiles/${safeId(profile.id)}/sessions/${safeId(session.id)}/attach`;
+  return nativeLease(await requester<unknown>(path, { method: "POST" }), profile.id, session.id);
+}
+
+/** Caller owns the nonce. Retry an uncertain send only with the identical nonce and text. */
+export async function sendHermesPrompt(
+  lease: HermesLease, capabilities: HermesCapability, nonce: string, text: string,
+  requester: HermesWriteRequester,
+): Promise<HermesAdmission> {
+  if (capabilities.sendable !== true) throw new AdapterError("permission_denied");
+  const path = `/api/v1/hermes/profiles/${safeId(lease.profileId)}/sessions/${safeId(lease.sessionId)}/send`;
+  const instanceId = safeId(lease.instanceId);
+  if (!NONCE.test(nonce)) throw new AdapterError("invalid_identifier");
+  if (!Number.isSafeInteger(lease.authorityEpoch) || lease.authorityEpoch <= 0
+    || typeof text !== "string" || !text.trim() || text.length > 4096) invalid();
+  const raw = await requester<unknown>(path, { method: "POST", body: JSON.stringify({
+    instance_id: instanceId, authority_epoch: lease.authorityEpoch, nonce, text,
+  }) });
+  const body = object(raw);
+  const returned = nativeLease(body, lease.profileId, lease.sessionId);
+  if (returned.instanceId !== lease.instanceId || returned.authorityEpoch !== lease.authorityEpoch) invalid();
+  const status = body.status;
+  if (status !== "queued" && status !== "started" && status !== "unknown" && status !== "terminal") invalid();
+  return { ...returned, admissionId: identifier(body.admission_id), status };
 }
 
 export async function getRemoteDesktops(fetcher: FetchLike = fetch, signal?: AbortSignal): Promise<{
