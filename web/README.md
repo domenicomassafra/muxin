@@ -2,7 +2,7 @@
 
 Questa directory è la superficie web React 19/TypeScript/Vite 7 originata da `controlcenter/dashboard/web` e importata nella issue [Plancia #27](https://github.com/domenicomassafra/plancia/issues/27). È ora la destinazione versionata della UI owner; il backend ControlCenter rimane autoritativo per API, auth, writer e audit. Vedi `../PRODUCT.md`, `../DESIGN.md`, `PROVENANCE.md`.
 
-Sviluppo, build e test sul Mac Studio (MacBook Air di supporto), dalla directory `web/`:
+Agenti, sviluppo, build e test sul solo Mac Studio, dalla directory `web/`:
 
 ```bash
 npm ci
