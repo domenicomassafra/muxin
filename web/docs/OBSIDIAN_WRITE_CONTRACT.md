@@ -1,15 +1,62 @@
-# Contratto esterno proposto per modifiche Obsidian (#13)
+# Editing Obsidian tramite writer canonico (#13)
 
-**Stato: proposta NON APPLICATA.** Il backend canonico rimane in `domenicomassafra/controlcenter:dashboard/backend/fleet2/`; il vault e il writer rimangono in `dodo-services/services/obsidian-mcp`. Nessun endpoint qui descritto risulta disponibile nel frontend attuale. Il client Plancia usa solo `GET /api/workspace/obsidian` e non mostra alcun salvataggio.
+La UI vive in Plancia. Backend e ricevute sono in ControlCenter; vault, policy,
+CAS e preimage appartengono al servizio Obsidian MCP di dodo-services. Nessun
+vault, token o secondo writer nel browser. Installazione e prova della release
+composta sono registrate nella #20.
 
-L'API attuale (`workspace_obsidian.py`) espone fino a **180** note indicizzate per filtro, fino a **40** risultati di ricerca su titolo/path/frontmatter e **64 KiB** di anteprima della nota selezionata. Non trasmette la preimage completa né l'hash SHA-256 necessario al CAS. Il flusso minimo per l'editing, da realizzare e revisionare **nel proprietario del backend**, è:
+## Lettura e permessi
 
-1. `GET /api/workspace/obsidian/note?path=<encoded>`: il server risolve un solo file `.md` dentro le root consentite, rifiuta traversals, dotfiles, symlink e path esclusi. Risponde `{path, content, sha256, editable, reason, modified}`. L'hash è SHA-256 dei **byte originali interi**, non del testo UTF-8 già troncato; su nota superiore al limite di editing risponde esplicitamente `editable:false`.
-2. `POST /api/workspace/obsidian/operations/note.edit/preview`: body `{path, content, expected_sha256, idempotency_key}`. Il backend verifica sessione owner, Origin esatta, CSRF `X-CSRF-Token`/cookie same-origin, allowlist di **scrittura del writer** distinta da quella di lettura, capability e preflight MCP server-side. Risponde `{packet_id, expires_at, diff, before_sha256, after_sha256}` con dimensioni limitate; diff/preview non mutano nulla. Il browser non riceve bearer né può inviare arbitrariamente un `mutation.preflight` considerato attendibile.
-3. `POST /api/workspace/obsidian/operations/note.edit/apply`: body `{packet_id, confirmation}`. Il server applica soltanto il packet non scaduto e verificato, mediante il writer canonico `obsidian-mcp.vault_write(overwrite=true, expected_sha256, mutation.preflight)` con credenziali server-side, e rilegge **la stessa path**. Receipt e SHA della postimage ritornano al client e nell'audit; nessun contenuto di nota entra nei log. Idempotency-key riconosce ripetizioni senza duplicare una modifica.
+`GET /api/workspace/obsidian/note?path=...` legge al massimo 256 KiB di Markdown
+UTF-8 e restituisce `{path, content, sha256, editable, reason, modified, size}`.
+SHA-256 identifica i byte originali interi. Il reader usa `O_NOFOLLOW` per le
+directory e rifiuta traversal, symlink, path esclusi e contenuti non testuali.
 
-`401` senza sessione, `403` per CSRF/Origin/permessi o path vietato (oppure `404` per evitare enumerazione), `409` per SHA obsoleto, modifica concorrente, file conflitto Syncthing o packet già invalidato, `422` per body non valido e `503` per writer non disponibile; ogni errore blocca la scrittura e preserva l'originale. Il client conserva localmente il draft e offre refresh/diff in caso di 409, senza retry distruttivi.
+L'editing richiede `CONTROLCENTER_OBSIDIAN_EDITING=1` sul server e il writer MCP
+canonico aggiornato. La UI consente sostituzioni di note esistenti in `04-areas`
+e `05-knowledge`. README, indici, hub, file nascosti e conflitti Syncthing non
+sono editabili da questa superficie; seguono il proprio writer specifico.
+La allowlist di lettura rimane più ampia di quella di scrittura.
 
-**Rischio aperto da risolvere nel writer:** `owned_write.py` ricalcola `expected_sha256` e poi esegue `os.replace` in operazioni distinte. Questa sequenza da sola non garantisce CAS atomico fra processi/Syncthing; prima di attivare l'UI servono guardia di concorrenza effettiva e test con mutazione fra verifica e replace, oltre a fixture per symlink/traversal, root escluse, path conflitto Syncthing, 401/403, stale SHA e replay. Il backend non viene cambiato dalla presente PR.
+## Preview e conferma
 
-Riferimenti: [#13 contratto diagnosticato](https://github.com/domenicomassafra/plancia/issues/13#issuecomment-6355530592), [donor SilverBullet MIT già selezionato #1](https://github.com/domenicomassafra/plancia/pull/24), [API corrente reader](https://github.com/domenicomassafra/plancia/issues/13#issuecomment-6355530592).
+`POST /api/workspace/obsidian/operations/note.edit/preview` riceve
+`{path, content, expected_sha256, idempotency_key}`. Verifica sessione owner,
+Origin, CSRF, limiti, path e preimage; produce un diff bounded senza mutazioni.
+Il packet contiene identità, SHA prima/dopo e scadenza a dieci minuti. Il backend
+conserva il testo nella sola memoria del processo, per un massimo di cento packet.
+Una chiave riutilizzata con contenuti diversi è rifiutata.
+
+La UI invalida la preview se cambia il testo o la nota e ne verifica path e SHA.
+Conserva le bozze in memoria al cambio nota, senza storage persistente del browser.
+
+`POST .../apply` riceve soltanto `{packet_id, confirmation:"CONFERMA"}`.
+Il backend rilegge la preimage e riserva atomicamente una receipt SQLite prima
+di invocare `vault_write` sul MCP loopback esistente. Risolve la credenziale con
+il consumer `secret` installato e costruisce il preflight sul server: il browser
+non propone capability o policy attendibili.
+
+Il writer usa il lock LifeOS e il CAS nativo già presente in
+`chatgpt_promoter.native_cas_replace`: verifica i byte spostati dallo scambio,
+conserva quelli concorrenti e mantiene il journal di recupero fuori dal vault.
+Sorgenti donor e schema pubblico dei venti tool restano invariati.
+
+## Readback, errori e replay
+
+Il backend rilegge la stessa path e confronta la postimage con lo SHA del packet
+e quello del writer. Solo allora termina la receipt con `succeeded`. Audit mostra
+identificatori e outcome, senza corpi delle note, diff o preimage.
+
+Una ripetizione dello stesso packet riuscito restituisce la receipt persistente
+senza una seconda scrittura. Una receipt in corso, fallita o interrotta richiede
+verifica esplicita; non viene rilanciata automaticamente. Dopo restart i packet
+in memoria decadono, mentre le receipt restano durevoli.
+
+`401` indica sessione assente; `403` nega Origin/CSRF/policy; `409` segnala versione
+obsoleta, conflitto, packet scaduto o esito da verificare; `422` rifiuta input non
+valido; `503` segnala un writer non verificabile. La UI conserva il draft e
+consuma la conferma al primo invio. Non riprova una scrittura incerta.
+
+Il lock è locale all'host e non serializza tutti i peer Syncthing. Il CAS nativo
+e il journal proteggono la pubblicazione; un conflitto esterno richiede
+riconciliazione, mai un overwrite forzato.

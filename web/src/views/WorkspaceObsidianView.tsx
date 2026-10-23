@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { relativeTime, sourceReason } from "../lib/format";
 import type { WorkspaceSnapshot } from "../lib/types";
 import { ObsidianMarkdown } from "./obsidian/ObsidianMarkdown";
+import { ObsidianEditor, type NoteDraft } from "./obsidian/ObsidianEditor";
 import { inAllowedRoots, noteTree, silverBulletNoteUrl, type IndexedNote, type NoteFolder } from "./obsidian/model";
 
 type Props = {
@@ -18,6 +19,7 @@ export function ObsidianWorkspace({ snapshot, search, root, onSearch, onRoot, on
   const [sort, setSort] = useState<Sort>("recent");
   const [query, setQuery] = useState(search);
   const detailRef = useRef<HTMLElement>(null);
+  const drafts = useRef(new Map<string, NoteDraft>()).current;
   const selected = snapshot.obsidian.selected;
   const selectedPath = selected?.path;
   const searching = Boolean(search.trim());
@@ -93,7 +95,6 @@ export function ObsidianWorkspace({ snapshot, search, root, onSearch, onRoot, on
         {selected ? (
           <>
             <div className="border-b border-ink-700 pb-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Nota canonica · sola lettura</p>
               <h2 className="mt-2 break-words text-xl font-semibold text-ink-100 sm:text-2xl">{selected.title}</h2>
               <p className="mt-2 break-all font-mono text-xs text-ink-400">{selected.path}</p>
               <p className="mt-2 text-xs text-ink-400">Modificata {relativeTime(selected.modified)} · {selected.size.toLocaleString("it-IT")} byte</p>
@@ -101,7 +102,7 @@ export function ObsidianWorkspace({ snapshot, search, root, onSearch, onRoot, on
                 <span role="note" className="inline-flex min-h-11 items-center rounded-lg border border-ink-700 px-3 text-xs text-ink-400" title="Nome del vault non attestato da un'autorità indipendente">Obsidian · apertura esterna non verificata</span>
                 {silverBulletUrl && <a className="inline-flex min-h-11 items-center rounded-lg border border-ink-600 px-3 text-xs text-ink-100 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100" href={silverBulletUrl}>Apri in SilverBullet ↗</a>}
               </div>
-              <p className="mt-3 text-xs leading-5 text-ink-400">La modifica in Plancia richiede ancora un endpoint autorizzato del writer canonico con controllo versione e gestione dei conflitti.</p>
+              <ObsidianEditor key={selected.path} path={selected.path} drafts={drafts} onSaved={() => onSelect(selected.path)} />
             </div>
             {selected.content_truncated && <p role="status" className="mt-4 rounded-lg border border-ink-600 p-3 text-xs text-ink-300">Anteprima troncata a 64 KiB: la nota potrebbe contenere altro testo.</p>}
             <div className="mt-6"><ObsidianMarkdown content={selected.content} sourcePath={selected.path} indexed={indexed} allowedRoots={snapshot.obsidian.allowlisted_roots} onSelect={onSelect} /></div>
