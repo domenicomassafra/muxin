@@ -50,6 +50,23 @@ export function inAllowedRoots(path: string, roots: string[]): boolean {
     && path.split("/").every((part) => part && part !== "." && part !== ".." && !part.startsWith("."));
 }
 
+/** Never hand the OS a deep link to a different vault file than the selected note. */
+export function verifiedObsidianOpenUri(uri: string, path: string, allowedRoots: string[]): string | null {
+  if (!inAllowedRoots(path, allowedRoots) || !uri.startsWith("obsidian://open?")) return null;
+  try {
+    const url = new URL(uri);
+    const vault = url.searchParams.getAll("vault");
+    const files = url.searchParams.getAll("file");
+    if (url.protocol !== "obsidian:" || url.host !== "open" || url.pathname || url.hash
+      || vault.length !== 1 || files.length !== 1 || !vault[0]
+      || /[\u0000-\u001f\u007f]/.test(vault[0]) || files[0] !== path
+      || [...url.searchParams.keys()].some((key) => key !== "vault" && key !== "file")) return null;
+    return uri;
+  } catch {
+    return null;
+  }
+}
+
 export function splitFrontmatter(content: string): { body: string; fields: FrontmatterField[]; raw: string | null } {
   const normalized = content.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
   if (!normalized.startsWith("---\n")) return { body: content, fields: [], raw: null };

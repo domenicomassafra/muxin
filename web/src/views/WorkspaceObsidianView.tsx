@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { relativeTime, sourceReason } from "../lib/format";
 import type { WorkspaceSnapshot } from "../lib/types";
 import { ObsidianMarkdown } from "./obsidian/ObsidianMarkdown";
-import { inAllowedRoots, noteTree, type IndexedNote, type NoteFolder } from "./obsidian/model";
+import { inAllowedRoots, noteTree, verifiedObsidianOpenUri, type IndexedNote, type NoteFolder } from "./obsidian/model";
 
 type Props = {
   snapshot: WorkspaceSnapshot;
@@ -52,6 +52,7 @@ export function ObsidianWorkspace({ snapshot, search, root, onSearch, onRoot, on
   const silverBulletUrl = selectedPath && inAllowedRoots(selectedPath, ["05-knowledge"])
     ? `/notes/${selectedPath.slice("05-knowledge/".length).replace(/\.md$/, "").split("/").map(encodeURIComponent).join("/")}`
     : null;
+  const obsidianUrl = selected && verifiedObsidianOpenUri(selected.open_uri, selected.path, snapshot.obsidian.allowlisted_roots);
 
   return (
     <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
@@ -100,7 +101,7 @@ export function ObsidianWorkspace({ snapshot, search, root, onSearch, onRoot, on
               <p className="mt-2 break-all font-mono text-xs text-ink-400">{selected.path}</p>
               <p className="mt-2 text-xs text-ink-400">Modificata {relativeTime(selected.modified)} · {selected.size.toLocaleString("it-IT")} byte</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                {selected.open_uri.startsWith("obsidian://open?") && <a className="inline-flex min-h-11 items-center rounded-lg border border-ink-600 px-3 text-xs font-semibold text-ink-100 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100" href={selected.open_uri}>Apri in Obsidian ↗</a>}
+                {obsidianUrl && <a className="inline-flex min-h-11 items-center rounded-lg border border-ink-600 px-3 text-xs font-semibold text-ink-100 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100" href={obsidianUrl}>Apri in Obsidian ↗</a>}
                 {silverBulletUrl && <a className="inline-flex min-h-11 items-center rounded-lg border border-ink-600 px-3 text-xs text-ink-100 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100" href={silverBulletUrl}>Apri in SilverBullet ↗</a>}
               </div>
               <p className="mt-3 text-xs leading-5 text-ink-400">La modifica in Plancia richiede ancora un endpoint autorizzato del writer canonico con controllo versione e gestione dei conflitti.</p>
