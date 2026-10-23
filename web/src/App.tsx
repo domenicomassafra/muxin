@@ -11,6 +11,7 @@ import type {
   Receipt,
 } from "./lib/types";
 import { ActivityView } from "./views/ActivityView";
+import { AgentsSection } from "./views/AgentsSection";
 import { FleetView } from "./views/FleetView";
 import { OverviewView } from "./views/OverviewView";
 import { ProfilesView } from "./views/ProfilesView";
@@ -281,16 +282,7 @@ export default function App() {
             ))}
           </section>
           <section hidden={view !== "agents"} aria-label="Agenti">
-            {visited.has("agents") && (
-              <div className="panel max-w-3xl p-6 sm:p-8">
-                <h1 className="text-2xl font-semibold text-ink-100">Agenti</h1>
-                <p className="mt-3 max-w-prose text-sm leading-6 text-ink-300">
-                  La console agenti è disponibile sullo stesso origin, con accesso governato dalla sessione owner.
-                  Le capacità di visualizzazione e invio dipendono dal server e dalla sessione originale.
-                </p>
-                <a className="button-secondary mt-6 inline-flex items-center" href="/agents">Apri la console agenti</a>
-              </div>
-            )}
+            {visited.has("agents") && <AgentsSection />}
           </section>
           <section hidden={view !== "profiles"}>
             {visited.has("profiles") && <ProfilesView active={view === "profiles"} initialFleet={profiles} onInventory={setProfiles} />}
@@ -326,6 +318,7 @@ export default function App() {
       {selected && (
         <HostDetail
           host={selected}
+          connectionOffline={status === "offline" || status === "connecting"}
           receipts={receipts}
           onClose={() => setSelectedHost(null)}
           onReceiptsChanged={loadReceipts}
