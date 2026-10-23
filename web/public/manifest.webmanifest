@@ -10,8 +10,8 @@
   "background_color": "#111111",
   "theme_color": "#111111",
   "icons": [
-    { "src": "/assets/plancia-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/assets/plancia-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/plancia-icon-192-6e349dd3.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/plancia-icon-512-1bd9ec58.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
     { "src": "/plancia-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

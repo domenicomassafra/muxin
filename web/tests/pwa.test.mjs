@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -56,8 +57,9 @@ test('manifest starts at the hash-routed shell and has 192/512 PNG icons', () =>
   for (const size of [192, 512]) {
     const icon = manifest.icons.find((item) => item.sizes === `${size}x${size}`);
     assert.equal(icon?.type, 'image/png');
-    assert.match(icon.src, /^\/assets\/plancia-icon-(192|512)\.png$/);
+    assert.match(icon.src, new RegExp(`^/assets/plancia-icon-${size}-[a-f0-9]{8}\\.png$`));
     const png = readFileSync(join(publicDir, icon.src.replace(/^\//, '')));
+    assert.equal(icon.src.match(/-([a-f0-9]{8})\.png$/)?.[1], createHash('sha256').update(png).digest('hex').slice(0, 8));
     assert.equal(png.subarray(1, 4).toString(), 'PNG');
     assert.equal(png.readUInt32BE(16), size);
     assert.equal(png.readUInt32BE(20), size);
@@ -69,17 +71,20 @@ test('PWA HTML, icons and registration match the existing ControlCenter static r
   // and /assets/* with a suffix allowlist. It does NOT yet serve /sw.js.
   assert.match(index, /<title>Plancia<\/title>/);
   assert.match(index, /name="theme-color" content="#111111"/);
-  assert.match(index, /src="\/assets\/pwa-register\.js"/);
-  assert.match(index, /href="\/assets\/plancia-icon-192\.png"/);
+  assert.match(index, /src="\/assets\/pwa-register-[a-f0-9]{8}\.js"/);
+  assert.match(index, /href="\/assets\/plancia-icon-192-[a-f0-9]{8}\.png"/);
   assert.match(index, /href="\/plancia-icon\.svg"/);
   assert.match(index, /href="\/manifest\.webmanifest"/);
 
   const allowedAssets = /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|png|svg)$/;
-  assert.match('/assets/pwa-register.js', allowedAssets);
+  const registerPath = index.match(/src="(\/assets\/pwa-register-[a-f0-9]{8}\.js)"/)?.[1];
+  assert.ok(registerPath);
+  assert.match(registerPath, allowedAssets);
   for (const icon of manifest.icons) {
     assert.ok(allowedAssets.test(icon.src) || icon.src === '/plancia-icon.svg', icon.src);
   }
-  const register = readFileSync(join(publicDir, 'assets', 'pwa-register.js'), 'utf8');
+  const register = readFileSync(join(publicDir, registerPath.slice(1)), 'utf8');
+  assert.equal(registerPath.match(/-([a-f0-9]{8})\.js$/)?.[1], createHash('sha256').update(register).digest('hex').slice(0, 8));
   assert.match(register, /serviceWorker\.register\('\/sw\.js',\s*\{\s*scope:\s*'\/'\s*\}\)/);
   assert.match(register, /location\.protocol === 'https:'|location\.hostname === 'localhost'/);
   assert.match(worker, /const CACHE_NAME/);
