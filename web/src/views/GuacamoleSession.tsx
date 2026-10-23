@@ -19,7 +19,7 @@ export function GuacamoleSession({ desktop, onDisconnect }: {
     const width = Math.max(320, Math.min(1920, element.clientWidth || 1024));
     const height = Math.max(240, Math.min(1080, Math.round(window.innerHeight * 0.65)));
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${scheme}//${location.host}/api/v1/desktops/${encodeURIComponent(desktop.id)}/tunnel?width=${width}&height=${height}`;
+    const url = `${scheme}//${location.host}/api/v1/desktops/${encodeURIComponent(desktop.id)}/tunnel`;
     const client = new Guacamole.Client(new Guacamole.WebSocketTunnel(url));
     clientRef.current = client;
     const display = client.getDisplay();
@@ -64,7 +64,7 @@ export function GuacamoleSession({ desktop, onDisconnect }: {
     const observer = new ResizeObserver(resize);
     observer.observe(element);
     try {
-      client.connect();
+      client.connect(`width=${width}&height=${height}`);
     } catch {
       setStatus("Impossibile aprire il desktop");
     }
