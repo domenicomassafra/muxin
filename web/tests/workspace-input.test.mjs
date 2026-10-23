@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createServer } from "vite";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 let vite;
 let NotionTypedInput;
+let createNotionPreviewGate;
+let NotionEditPanel;
 
 before(async () => {
   vite = await createServer({ appType: "custom", logLevel: "silent", server: { middlewareMode: true } });
   ({ NotionTypedInput } = await vite.ssrLoadModule("/src/components/NotionTypedInput.tsx"));
+  ({ createNotionPreviewGate } = await vite.ssrLoadModule("/src/views/notionPreviewGate.ts"));
+  ({ NotionEditPanel } = await vite.ssrLoadModule("/src/views/NotionEditPanel.tsx"));
 });
 
 after(async () => {
@@ -30,4 +36,101 @@ test("Notion multi_select shows existing tags and sends typed arrays for each to
   inputs.Later.props.onChange({ target: { checked: true } });
   inputs.Urgent.props.onChange({ target: { checked: false } });
   assert.deepEqual(changes, [["Urgent", "Legacy", "Later"], ["Legacy"]]);
+});
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+function packet(rowId, changes) {
+  return { row_id: rowId, changes, packet_id: `${rowId}-packet`, apply_allowed: true };
+}
+
+test("late preview A cannot replace B or send A to canonical apply", async () => {
+  const gate = createNotionPreviewGate();
+  const a = deferred();
+  const b = deferred();
+  const accepted = [];
+  const errors = [];
+  const onReady = (value) => accepted.push(value);
+  const onError = (message) => errors.push(message);
+  const first = gate.preview({ rowId: "A", changes: { Status: "Doing" }, fetchPacket: () => a.promise, onReady, onError });
+  gate.invalidate(); // The user selects row B before A responds.
+  const second = gate.preview({ rowId: "B", changes: { Status: "Done" }, fetchPacket: () => b.promise, onReady, onError });
+  const bPacket = packet("B", { Status: "Done" });
+  b.resolve(bPacket);
+  await second;
+  a.resolve(packet("A", { Status: "Doing" }));
+  await first;
+
+  assert.deepEqual(accepted, [bPacket]);
+  assert.deepEqual(errors, []);
+  const sent = [];
+  await assert.rejects(gate.apply(packet("A", { Status: "Doing" }), "APPLICA", async (value) => { sent.push(value); }), /scaduta/i);
+  await gate.apply(bPacket, "APPLICA", async (value) => { sent.push(value); });
+  assert.deepEqual(sent, [bPacket]);
+});
+
+test("changing draft or refreshing invalidates pending and accepted previews", async () => {
+  const gate = createNotionPreviewGate();
+  const pending = deferred();
+  const accepted = [];
+  const onReady = (value) => accepted.push(value);
+  const onError = () => assert.fail("A stale preview must be silent");
+  const task = gate.preview({ rowId: "A", changes: { Priority: "High" }, fetchPacket: () => pending.promise, onReady, onError });
+  gate.invalidate(); // Draft edited while the preview is still pending.
+  pending.resolve(packet("A", { Priority: "High" }));
+  await task;
+  assert.deepEqual(accepted, []);
+
+  const current = packet("A", { Priority: "Low" });
+  await gate.preview({ rowId: "A", changes: { Priority: "Low" }, fetchPacket: async () => current, onReady, onError });
+  assert.equal(gate.isCurrent(current), true);
+  gate.invalidate(); // Refresh begins before apply.
+  assert.equal(gate.isCurrent(current), false);
+  await assert.rejects(gate.apply(current, "APPLICA", async () => assert.fail("Stale apply")), /scaduta/i);
+});
+
+test("reject mismatched server preview row or edits and stale errors", async () => {
+  const gate = createNotionPreviewGate();
+  const accepted = [];
+  const errors = [];
+  const props = { rowId: "B", changes: { Status: "Done" }, onReady: (value) => accepted.push(value), onError: (message) => errors.push(message) };
+  await gate.preview({ ...props, fetchPacket: async () => packet("A", props.changes) });
+  await gate.preview({ ...props, fetchPacket: async () => packet("B", { Status: "Doing" }) });
+  assert.deepEqual(accepted, []);
+  assert.equal(errors.length, 2);
+  await assert.rejects(gate.apply(packet("A", props.changes), "APPLICA", async () => {}), /scaduta/i);
+
+  const stale = deferred();
+  const task = gate.preview({ ...props, fetchPacket: () => stale.promise });
+  gate.invalidate();
+  stale.reject(new Error("errore da A"));
+  await task;
+  assert.equal(errors.length, 2);
+});
+
+test("Notion editor exposes all editable properties, before/after values and only the matching packet", () => {
+  const schema = Array.from({ length: 10 }, (_, index) => ({
+    id: `property-${index}`, name: `Property ${index}`, type: "rich_text", options: [], editable: true,
+  }));
+  const row = { id: "row-b", title: "Action B", url: null, properties: { "Property 9": "before" } };
+  const current = { ...packet("row-b", { "Property 9": "after" }), before: { "Property 9": "before" }, preimage_hash: "digest", receipt_id: "receipt" };
+  const props = {
+    row, schema, draft: { "Property 9": "after" }, packet: current,
+    onDraft: () => {}, onPreview: () => {}, onApply: async () => {}, onApplied: () => {},
+    onRolledBack: () => {}, onReplayRolledBack: () => {}, isPacketCurrent: (value) => value === current,
+  };
+  const html = renderToStaticMarkup(createElement(NotionEditPanel, props));
+  assert.match(html, /Property 9/);
+  assert.match(html, /Prima: before/);
+  assert.match(html, /Dopo: after/);
+  assert.match(html, /10 proprietà editabili/);
+  assert.match(html, /Salva su Notion/);
+
+  const stale = renderToStaticMarkup(createElement(NotionEditPanel, { ...props, packet: packet("row-a", { "Property 9": "wrong" }) }));
+  assert.doesNotMatch(stale, /Salva su Notion/);
 });
