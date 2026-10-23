@@ -7,12 +7,14 @@
     <meta name="theme-color" content="#080a0e" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Plancia" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" href="/plancia-icon-192.png" />
     <title>Signal Deck</title>
     <link rel="icon" href="data:," />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script defer src="/pwa-register.js"></script>
   </body>
 </html>
