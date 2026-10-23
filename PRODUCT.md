@@ -16,6 +16,6 @@ Una sola navigazione e identità owner, in browser responsive/PWA. Panoramica, F
 
 ## Stato e criteri di rilascio
 
-L'import iniziale della UI React/Vite nel repository Plancia costituisce una **base di codice da integrare**. In questa fase il servizio operativo resta una release immutabile ControlCenter sul MiniPC. #6 realizza shell/theme e navigazione, #12/#13 le due superfici Workspace, #18 mobile/PWA, #20 integra, installa e verifica il consumer. Test di build e snapshot di sorgente non dimostrano accesso owner o parità funzionale.
+La UI React/Vite proviene esclusivamente da `plancia/web/`. Il servizio sul MiniPC serve un artefatto Plancia verificato insieme al backend canonico ControlCenter, nella stessa origine autenticata. Il packaging controlla commit e digest, conserva preimage e ricevuta del deploy e consente il rollback. La riconciliazione e le prove del consumer sono nella #20; la procedura è in `DESIGN.md`.
 
-Un rilascio si accetta con URL della stessa origine, auth/CSRF funzionanti, navigazione desktop/mobile provata, API senza dati duplicati, prova di una scrittura consentita con readback per ciascun dominio e rollback della release. Test fisici iPhone e Windows rimangono nella [#25](https://github.com/domenicomassafra/plancia/issues/25).
+Un rilascio si accetta con URL della stessa origine, auth/CSRF funzionanti, navigazione desktop/mobile provata, API senza dati duplicati, prove governate dei writer e rollback della release. Il collaudo dell'editor usa una fixture sintetica con readback; Notion richiede preview e post-fetch senza modifiche accidentali alle Actions personali. Test fisici iPhone e Windows rimangono nella [#25](https://github.com/domenicomassafra/plancia/issues/25); la checklist runtime è controlcenter#484.
