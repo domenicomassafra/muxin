@@ -85,93 +85,86 @@ export function AgentsSignoriView() {
   };
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-4">
+      <header className="flex items-start justify-between gap-3">
         <div>
-          <p className="eyebrow">Agenti · origine Hermes</p>
-          <h1 className="mt-2 text-2xl font-semibold text-ink-100">Profili Signori e sessioni</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-400">
-            Inventario nativo dal MiniPC e readback delle sessioni originali tramite il backend owner.
-            Nessuna sessione nuova viene avviata da questa vista.
-          </p>
+          <p className="eyebrow">Origine nativa · Hermes</p>
+          <h2 className="mt-1 text-xl font-semibold text-ink-100">Conversazioni dei Signori</h2>
+          <p className="mt-2 text-sm text-ink-400">Sessioni originali sul MiniPC, cronologia redatta e capacità dichiarate dal server.</p>
         </div>
-        <button type="button" onClick={reload} className="button-secondary min-h-11">Aggiorna</button>
+        <button type="button" onClick={reload} className="button-secondary min-h-11 shrink-0">Aggiorna</button>
       </header>
-
       {inventory.state === "loading" && <StateNotice message="Verifica dell'adapter Hermes in corso…" />}
       {inventory.state === "error" && <StateNotice message={`Hermes non disponibile: ${inventory.message}`} />}
       {inventory.state === "ready" && inventory.data.length === 0 &&
         <StateNotice message="Nessun profilo Hermes autorizzato restituito dal server." />}
 
       {inventory.state === "ready" && inventory.data.length > 0 && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <section className="min-w-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900" aria-label="Profili Hermes">
-            <h2 className="border-b border-ink-700 px-4 py-3 text-sm font-semibold text-ink-100">Profili nativi</h2>
-            <div className="divide-y divide-ink-700">
+        <div className="grid min-h-[560px] min-w-0 overflow-hidden rounded-2xl border border-ink-700 bg-ink-900 lg:grid-cols-[minmax(220px,300px)_minmax(0,1fr)]">
+          <aside className="min-w-0 border-b border-ink-700 lg:border-r lg:border-b-0" aria-label="Profili e sessioni Hermes">
+            <h3 className="border-b border-ink-700 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Profili nativi</h3>
+            <div className="max-h-64 divide-y divide-ink-700 overflow-y-auto">
               {inventory.data.map((profile) => (
                 <button key={profile.id} type="button" onClick={() => selectProfile(profile.id)}
                   aria-pressed={profileId === profile.id}
-                  className={`flex min-h-16 w-full items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ink-100 ${profileId === profile.id ? "bg-ink-800" : "hover:bg-ink-850"}`}>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-ink-100">{profile.name}</span>
-                    <span className="block break-words text-xs text-ink-400">{profile.id} · {profile.host}</span>
-                    {profile.version && <span className="block text-xs text-ink-500">{profile.version}</span>}
-                  </span>
-                  <span className="shrink-0 text-right text-xs text-ink-300">
-                    <span className="block">Gateway: {profile.gateway === "running" ? "attivo" : profile.gateway === "stopped" ? "fermo" : "non verificato"}</span>
-                    <span className="block text-ink-400">{profile.capabilities.readable ? "Lettura consentita" : "Lettura non abilitata"}</span>
-                  </span>
+                  className={`flex min-h-14 w-full items-center justify-between gap-2 px-4 py-3 text-left hover:bg-ink-850 ${profileId === profile.id ? "bg-ink-800" : ""}`}>
+                  <span className="min-w-0"><span className="block truncate text-sm font-medium text-ink-100">{profile.name}</span>
+                    <span className="block truncate text-xs text-ink-400">{profile.id} · {profile.host}</span></span>
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${profile.gateway === "running" ? "bg-ink-200" : "bg-ink-600"}`} aria-label={`Gateway ${profile.gateway}`} />
                 </button>
               ))}
             </div>
-          </section>
-
-          <section className="min-w-0 rounded-xl border border-ink-700 bg-ink-900 p-4" aria-label="Sessioni Hermes">
-            <h2 className="text-sm font-semibold text-ink-100">Sessioni esistenti</h2>
-            {!selectedProfile && <p className="mt-3 text-sm text-ink-400">Seleziona un profilo per verificarne le sessioni.</p>}
-            {selectedProfile && !canRead && <p role="status" className="mt-3 text-sm text-ink-400">Il server non autorizza il readback delle sessioni di questo profilo.</p>}
-            {selectedProfile && canRead && sessions.state === "loading" && <p role="status" className="mt-3 text-sm text-ink-400">Lettura delle sessioni…</p>}
-            {selectedProfile && canRead && sessions.state === "error" && <p role="status" className="mt-3 text-sm text-ink-400">{sessions.message}</p>}
-            {selectedProfile && canRead && sessions.state === "ready" && sessions.data.length === 0 && <p className="mt-3 text-sm text-ink-400">Nessuna sessione nativa restituita.</p>}
-            {selectedProfile && canRead && sessions.state === "ready" && sessions.data.length > 0 && (
-              <ul className="mt-3 space-y-2">
-                {sessions.data.map((session) => (
-                  <li key={session.id}>
-                    <button type="button" onClick={() => selectSession(session.id)} aria-pressed={sessionId === session.id}
-                      className={`min-h-11 w-full rounded-lg border px-3 py-2 text-left text-xs focus-visible:outline-2 focus-visible:outline-ink-100 ${sessionId === session.id ? "border-ink-300 bg-ink-800" : "border-ink-700 hover:bg-ink-850"}`}>
-                      <span className="block break-all font-medium text-ink-100">{session.title || session.id}</span>
-                      <span className="block break-all text-ink-400">{session.id}{session.updated_at ? ` · ${session.updated_at}` : ""}</span>
-                    </button>
+            <h3 className="border-y border-ink-700 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Sessioni esistenti</h3>
+            <div className="max-h-80 space-y-1 overflow-auto p-3">
+              {!selectedProfile && <p className="text-sm text-ink-400">Seleziona un Signore.</p>}
+              {selectedProfile && !canRead && <p role="status" className="text-sm text-ink-400">Lettura non autorizzata.</p>}
+              {selectedProfile && canRead && sessions.state === "loading" && <p role="status" className="text-sm text-ink-400">Caricamento sessioni…</p>}
+              {selectedProfile && canRead && sessions.state === "error" && <p role="status" className="text-sm text-ink-400">{sessions.message}</p>}
+              {selectedProfile && canRead && sessions.state === "ready" && sessions.data.length === 0 && <p className="text-sm text-ink-400">Nessuna sessione restituita.</p>}
+              {selectedProfile && canRead && sessions.state === "ready" && sessions.data.map((session) => (
+                <button key={session.id} type="button" onClick={() => selectSession(session.id)} aria-pressed={sessionId === session.id}
+                  className={`min-h-11 w-full rounded-lg px-3 py-2 text-left hover:bg-ink-850 ${sessionId === session.id ? "bg-ink-800 ring-1 ring-ink-600" : ""}`}>
+                  <span className="block truncate text-sm font-medium text-ink-100">{session.title || session.id}</span>
+                  <span className="block truncate text-xs text-ink-400">{session.updated_at || session.id}</span>
+                </button>
+              ))}
+            </div>
+          </aside>
+          <section className="flex min-h-[520px] min-w-0 flex-col" aria-label="Conversazione Hermes">
+            <header className="border-b border-ink-700 px-5 py-4">
+              <h3 className="font-semibold text-ink-100">{selectedProfile?.name || "Scegli un Signore"}</h3>
+              <p className="mt-1 break-all text-xs text-ink-400">
+                {sessionId ? `Sessione nativa ${sessionId} · lettura redatta` : "Cronologia e permessi del profilo originale"}
+              </p>
+            </header>
+            <div role="log" aria-label="Messaggi redatti" className="max-h-[560px] min-h-72 flex-1 space-y-4 overflow-auto p-5">
+              {!sessionId && <div className="grid min-h-64 place-content-center text-center">
+                <p className="font-medium text-ink-100">Le conversazioni restano in Hermes</p>
+                <p className="mt-2 text-sm text-ink-400">Seleziona un profilo e una sessione esistente per leggerla qui.</p>
+              </div>}
+              {sessionId && messages.state === "loading" && <p role="status" className="text-sm text-ink-400">Lettura dei messaggi…</p>}
+              {sessionId && messages.state === "error" && <p role="status" className="text-sm text-ink-400">{messages.message}</p>}
+              {sessionId && messages.state === "ready" && messages.data.length === 0 && <p className="text-sm text-ink-400">Nessun messaggio esportato.</p>}
+              {sessionId && messages.state === "ready" && <ol className="space-y-4">
+                {messages.data.map((message, index) => (
+                  <li key={`${sessionId}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <article className={`max-w-[90%] min-w-0 rounded-2xl border p-4 sm:max-w-[80%] ${message.role === "user" ? "border-ink-500 bg-ink-800" : "border-ink-700 bg-ink-850"}`}>
+                      <p className="text-xs font-medium text-ink-400">{message.role === "assistant" ? selectedProfile?.name || "Hermes" : message.role === "user" ? "Tu" : message.role === "tool" ? "Tool" : "Sistema"}{message.timestamp ? ` · ${message.timestamp}` : ""}</p>
+                      <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-ink-100">{message.text}</pre>
+                    </article>
                   </li>
                 ))}
-              </ul>
-            )}
+              </ol>}
+            </div>
+            <footer className="border-t border-ink-700 p-4">
+              <label htmlFor="hermes-composer" className="sr-only">Messaggio Hermes</label>
+              <textarea id="hermes-composer" disabled rows={2} placeholder="Invio non disponibile: il backend non ha ancora verificato il reattach alla stessa sessione"
+                className="w-full resize-none rounded-xl border border-ink-700 bg-ink-950 p-3 text-sm text-ink-400 disabled:cursor-not-allowed" />
+              <p className="mt-2 text-xs leading-5 text-ink-400">Allegati, streaming e tool interattivi richiedono il trasporto Hermes originale con permesso di invio. Questo pannello mostra solo l'export redatto.</p>
+            </footer>
           </section>
         </div>
       )}
-
-      {selectedProfile && canRead && sessionId && sessions.state === "ready" && sessions.data.some((item) => item.id === sessionId) && (
-        <section className="rounded-xl border border-ink-700 bg-ink-900 p-4" aria-label="Messaggi redatti">
-          <h2 className="text-sm font-semibold text-ink-100">Readback della sessione originale</h2>
-          <p className="mt-1 text-xs text-ink-400">Solo export redatto Hermes. Riapertura interattiva e invio richiedono un trasporto nativo e un grant owner ancora da verificare.</p>
-          {messages.state === "loading" && <p role="status" className="mt-3 text-sm text-ink-400">Lettura dei messaggi…</p>}
-          {messages.state === "error" && <p role="status" className="mt-3 text-sm text-ink-400">{messages.message}</p>}
-          {messages.state === "ready" && messages.data.length === 0 && <p className="mt-3 text-sm text-ink-400">Nessun messaggio esportato.</p>}
-          {messages.state === "ready" && <ol className="mt-3 space-y-3">
-            {messages.data.map((message, index) => (
-              <li key={`${sessionId}-${index}`} className="rounded-lg border border-ink-700 bg-ink-850 p-3">
-                <p className="text-xs font-semibold text-ink-200">{message.role}{message.timestamp ? ` · ${message.timestamp}` : ""}</p>
-                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-sans text-sm text-ink-300">{message.text}</pre>
-              </li>
-            ))}
-          </ol>}
-        </section>
-      )}
-
-      <aside className="rounded-xl border border-ink-700 bg-ink-900 p-4 text-sm text-ink-400">
-        <p>La cronologia indicizzata Orca è una fonte distinta dall'inventario e dalle sessioni Hermes native.</p>
-        <a href="/agents" className="mt-2 inline-flex min-h-11 items-center text-ink-100 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ink-100">Apri cronologia Orca esistente ↗</a>
-      </aside>
     </div>
   );
 }
