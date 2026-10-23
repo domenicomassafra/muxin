@@ -65,3 +65,60 @@ test("Obsidian tree navigates full bounded nodes even when results only include 
   assert.match(html, /ricerca massima 40 risultati/);
   assert.match(html, /Seleziona una nota/);
 });
+
+test("Obsidian desktop links must match the authorized selected path, not a forged URI", () => {
+  const snapshot = {
+    obsidian: {
+      source: { available: true, reason: null },
+      allowlisted_roots: ["05-knowledge"],
+      nodes: indexed,
+      results: indexed,
+      selected: {
+        ...indexed[1],
+        content: "# Safe note",
+        content_truncated: false,
+        links: [], backlinks: [],
+        open_uri: "obsidian://open?vault=Test&file=00-system%2FSecret.md",
+      },
+    },
+  };
+  const render = () => renderToStaticMarkup(React.createElement(ObsidianWorkspace, {
+    snapshot, search: "", root: "all", onSearch: () => {}, onRoot: () => {}, onSelect: () => {},
+  }));
+  assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
+  snapshot.obsidian.selected.open_uri = "obsidian://open?vault=Test&file=05-knowledge%2FDaily.md";
+  assert.match(render(), /href="obsidian:\/\/open\?/);
+  snapshot.obsidian.selected.open_uri += "&file=00-system%2FSecret.md";
+  assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
+  snapshot.obsidian.selected.open_uri = "obsidian://open?vault=Test&file=05-knowledge%2FDaily.md&intent=edit";
+  assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
+  snapshot.obsidian.selected.open_uri = "obsidian://open?vault=Test&file=05-knowledge%2FDaily.md#forged";
+  assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
+  snapshot.obsidian.selected.path = "00-system/Secret.md";
+  snapshot.obsidian.selected.open_uri = "obsidian://open?vault=Test&file=00-system%2FSecret.md";
+  assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
+});
+
+test("Markdown never makes unsupported protocols or external embeds clickable/loadable", () => {
+  const content = [
+    "[javascript](javascript:alert(1))",
+    "[data](data:text/html;base64,PHNjcmlwdD4=)",
+    "[file](file:///private/secret)",
+    "[ftp](ftp://example.test/file)",
+    "[custom](obsidian://open?vault=Other&file=Secret.md)",
+    "[protocol relative](//tracker.example.test/collect)",
+    "[safe](https://example.test/path)",
+    "[email](mailto:person@example.test)",
+    "![local](file:///private/secret)",
+    "![remote](https://tracker.example.test/pixel.png)",
+    "<iframe src=\"https://tracker.example.test/\"></iframe>",
+  ].join("\n\n");
+  const html = renderToStaticMarkup(React.createElement(ObsidianMarkdown, {
+    content, sourcePath: "05-knowledge/Daily.md", indexed, allowedRoots: ["05-knowledge"], onSelect: () => {},
+  }));
+  const links = [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(links, ["https://example.test/path", "mailto:person@example.test"]);
+  assert.doesNotMatch(html, /<(?:iframe|img|script|video|audio|object|embed)\b/i);
+  assert.match(html, /Allegato non caricato: local/);
+  assert.match(html, /Allegato non caricato: remote/);
+});
