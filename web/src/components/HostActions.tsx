@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { receiptActionLabel, receiptOutcomeLabel, relativeTime } from "../lib/format";
+import { receiptActionLabel, relativeTime } from "../lib/format";
 import type { Capabilities, Receipt } from "../lib/types";
+import { hostActionFeedback, type HostActionFeedback } from "./host-action-feedback";
 
 interface HostActionsProps {
   hostId: string;
@@ -15,7 +16,7 @@ export function HostActions({ hostId, onReceiptsChanged }: HostActionsProps) {
   const [preview, setPreview] = useState<{ key: string; receiptId: string } | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [feedback, setFeedback] = useState<HostActionFeedback | null>(null);
   const actionLock = useRef(false);
   const idempotencyKeys = useRef<Record<string, string>>({});
 
@@ -68,7 +69,7 @@ export function HostActions({ hostId, onReceiptsChanged }: HostActionsProps) {
       delete idempotencyKeys.current[key];
       setPreview(null);
       setConfirmation("");
-      setFeedback({ kind: "ok", text: `Azione ${receiptActionLabel(key)} acquisita; verifico la ricevuta…` });
+      setFeedback({ kind: "warn", text: `Azione ${receiptActionLabel(key)} acquisita; verifico la ricevuta…` });
       onReceiptsChanged();
       let terminal: Receipt | null = null;
       for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -84,13 +85,9 @@ export function HostActions({ hostId, onReceiptsChanged }: HostActionsProps) {
         }
       }
       if (!terminal) {
-        setFeedback({ kind: "ok", text: `${receiptActionLabel(key)} ancora in esecuzione; consulta Audit.` });
-      } else if (terminal.outcome === "failed") {
-        setFeedback({ kind: "error", text: `${receiptActionLabel(key)} fallita. Ricevuta ${terminal.id} in Audit.` });
-      } else if (terminal.outcome === "dispatched") {
-        setFeedback({ kind: "ok", text: `${receiptActionLabel(key)} inviata; completamento da verificare. Ricevuta ${terminal.id}.` });
+        setFeedback({ kind: "warn", text: `${receiptActionLabel(key)} ancora in esecuzione; consulta Audit.` });
       } else {
-        setFeedback({ kind: "ok", text: `${receiptActionLabel(key)}: ${receiptOutcomeLabel(terminal.outcome)}. Ricevuta ${terminal.id}.` });
+        setFeedback(hostActionFeedback(terminal, receiptActionLabel(key)));
       }
       onReceiptsChanged();
     } catch (error) {
@@ -167,7 +164,9 @@ export function HostActions({ hostId, onReceiptsChanged }: HostActionsProps) {
       )}
       {feedback && (
         <p role="status" className={`mt-3 rounded-lg px-3 py-2 text-xs ${
-          feedback.kind === "ok" ? "bg-signal-ok/10 text-signal-ok" : "bg-signal-crit/10 text-signal-crit"
+          feedback.kind === "ok" ? "bg-signal-ok/10 text-signal-ok"
+            : feedback.kind === "warn" ? "bg-signal-warn/10 text-signal-warn"
+              : "bg-signal-crit/10 text-signal-crit"
         }`}>{feedback.text}</p>
       )}
     </section>
