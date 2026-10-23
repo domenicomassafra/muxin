@@ -29,6 +29,7 @@ export function WorkspaceView({ active = true, onRefresh }: { active?: boolean; 
   const [selectedRow, setSelectedRow] = useState<WorkspaceNotionRow | null>(null);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [packet, setPacket] = useState<WorkspaceActionItemOperationPacket | null>(null);
+  const [appliedByRow, setAppliedByRow] = useState<Record<string, { packet: WorkspaceActionItemOperationPacket; receiptId: string }>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [obsidianRoot, setObsidianRoot] = useState("all");
@@ -36,6 +37,8 @@ export function WorkspaceView({ active = true, onRefresh }: { active?: boolean; 
   const obsidianRequest = useRef(0);
   const wasActive = useRef(active);
   const notionPreviewGate = useRef(createNotionPreviewGate()).current;
+  const editRevision = useRef(0);
+  const applyRevisions = useRef(new WeakMap<WorkspaceActionItemOperationPacket, number>());
 
   const loadObsidian = (query: string, root: string, note = "", canonNotice = false) => {
     const request = ++obsidianRequest.current;
@@ -54,6 +57,7 @@ export function WorkspaceView({ active = true, onRefresh }: { active?: boolean; 
   };
 
   const load = (refresh = false) => {
+    editRevision.current += 1;
     notionPreviewGate.invalidate();
     setPacket(null);
     const currentObsidianRequest = obsidianRequest.current;
@@ -111,6 +115,7 @@ export function WorkspaceView({ active = true, onRefresh }: { active?: boolean; 
   };
 
   const selectRow = (row: WorkspaceNotionRow) => {
+    editRevision.current += 1;
     notionPreviewGate.invalidate();
     setSelectedRow(row);
     setPacket(null);
@@ -120,6 +125,7 @@ export function WorkspaceView({ active = true, onRefresh }: { active?: boolean; 
 
   const preview = () => {
     if (!selectedRow) return;
+    editRevision.current += 1;
     const changes = notionDraftChanges(draft, selectedRow.properties);
     notionPreviewGate.invalidate();
     setPacket(null);
@@ -150,7 +156,7 @@ export function WorkspaceView({ active = true, onRefresh }: { active?: boolean; 
           <p className="eyebrow">Workspace personale</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-ink-100">Workspace</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-400">
-            Notion gestisce le azioni operative. Obsidian resta il canone di conoscenza. Signal Deck li proietta senza creare un secondo database.
+            Notion gestisce le azioni operative. Obsidian resta il canone di conoscenza. Plancia li proietta senza creare un secondo database.
           </p>
         </div>
         <button
@@ -217,28 +223,46 @@ export function WorkspaceView({ active = true, onRefresh }: { active?: boolean; 
             selectedRow={selectedRow}
             draft={draft}
             packet={packet}
+            applied={selectedRow ? appliedByRow[selectedRow.id] ?? null : null}
             loadingMore={notionLoadingMore}
             onSelect={selectRow}
             onDraft={(value) => {
+              editRevision.current += 1;
               notionPreviewGate.invalidate();
               setDraft(value);
               setPacket(null);
             }}
             onPreview={preview}
             isPacketCurrent={notionPreviewGate.isCurrent}
-            onApply={(value, confirmation) => notionPreviewGate.apply(value, confirmation, api.workspaceActionItemOperationApply)}
+            onApply={(value, confirmation) => {
+              applyRevisions.current.set(value, editRevision.current);
+              return notionPreviewGate.apply(value, confirmation, api.workspaceActionItemOperationApply);
+            }}
             onApplied={(result, appliedPacket) => {
+              if (result.row.id !== appliedPacket.row_id) {
+                setNotice("Readback Notion incoerente: ricarica le fonti prima di intervenire.");
+                load(true);
+                return;
+              }
               setNotionDatabase((current) => current ? {
                 ...current,
                 rows: current.rows.map((row) => row.id === result.row.id ? result.row : row),
               } : current);
-              if (notionPreviewGate.isCurrent(appliedPacket)) {
+              setAppliedByRow((current) => ({ ...current, [appliedPacket.row_id]: { packet: appliedPacket, receiptId: result.receipt_id } }));
+              if (applyRevisions.current.get(appliedPacket) === editRevision.current) {
                 setSelectedRow(result.row);
                 setDraft({ ...result.row.properties });
+                setPacket(null);
               }
               setNotice(`Modifica salvata. La ricevuta ${result.receipt_id} può ancora ripristinarla.`);
             }}
-            onRolledBack={(result) => {
+            onRolledBack={(result, appliedPacket) => {
+              setAppliedByRow((current) => {
+                if (current[appliedPacket.row_id]?.packet !== appliedPacket) return current;
+                const remaining = { ...current };
+                delete remaining[appliedPacket.row_id];
+                return remaining;
+              });
               setNotice(`Modifica ripristinata · Registry ${result.rollback_registry_id} · ricevuta ${result.receipt_id}.`);
               load(true);
             }}
