@@ -23,6 +23,26 @@ strutturata Orca come riferimento per stato di invio e tool. La shell,
 le sessioni e l'autorizzazione rimangono quelle già installate in Plancia e
 ControlCenter, senza aggiungere un daemon T3/Orca/Paseo né un archivio conversazioni.
 
+### UI osservate e segnalazioni concrete
+
+Nel Chrome dedicato del Mac Studio, il 23/10/2026, ho aperto
+[t3.codes](https://t3.codes/) e la pagina ufficiale
+[Orca Chat UI](https://www.onorca.dev/docs/agents/native-chat);
+OpenManusDemo su Hugging Face era nello stato `Paused`, dunque non è stato
+possibile provarne una sessione interattiva. Il sito T3 mostra il layout reale
+con thread a sinistra, conversazione e diff PR affiancati, e un composer in
+basso. La documentazione Orca dichiara espressamente la chat nativa ancora
+**sperimentale**, con Pi nel gruppo dei provider strutturati e sessioni
+terminal-backed per i fallback WSL/SSH; non fornisce un widget web autonomo.
+
+Le esperienze del tracker upstream sono importanti per i limiti del riuso:
+[Orca #22320 (22/09/2026)](https://github.com/stablyai/orca/issues/22320)
+descrive allegati immagine/file **non disponibili per chat remote**;
+[T3 #22109 (20/10/2026)](https://github.com/pingdotgg/t3code/issues/22109)
+descrive overflow orizzontale quando il popover delle citazioni esce dal
+riquadro chat. Per questo il prototipo usa
+`min-w-0`, overflow confinato e nessuna promessa di allegati remoti.
+
 ## Architettura della chat embedded
 
 ```text
