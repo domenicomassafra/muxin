@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { OmniRouteStatus } from "../lib/types";
+import { createOmniRouteReader, isOmniRouteConverged, type OmniRouteReadState } from "./omniroute-reader";
 
 const VERDICTS = {
   clean: { label: "Convergente", color: "text-signal-ok" },
@@ -11,29 +11,22 @@ const VERDICTS = {
 } as const;
 
 export function OmniRoutePanel({ active }: { active: boolean }) {
-  const [status, setStatus] = useState<OmniRouteStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const refresh = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    void api.omniroute()
-      .then(setStatus)
-      .catch((cause: Error) => {
-        setStatus(null);
-        setError(cause.message);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const [readState, setReadState] = useState<OmniRouteReadState>({ status: null, error: null, loading: false });
+  const [reader] = useState(() => createOmniRouteReader(api.omniroute, setReadState));
+  const { status, error, loading } = readState;
 
   useEffect(() => {
-    if (active && status === null && !loading && error === null) refresh();
-  }, [active, status, loading, error, refresh]);
+    reader.setActive(active);
+    return () => reader.dispose();
+  }, [active, reader]);
 
   const observation = status?.observation;
   const policy = status?.policy;
-  const verdict = VERDICTS[observation?.result ?? "unavailable"];
+  const verdict = loading
+    ? { label: "Verifica in corso…", color: "text-ink-300" }
+    : isOmniRouteConverged(status) ? VERDICTS.clean
+      : observation?.result === "clean" ? { label: "Verifica incompleta", color: "text-signal-warn" }
+        : VERDICTS[observation?.result ?? "unavailable"];
   const drift = observation?.items.filter((item) => item.result !== "clean") ?? [];
 
   return (
@@ -43,7 +36,7 @@ export function OmniRoutePanel({ active }: { active: boolean }) {
           <h2 id="omniroute-heading" className="text-base font-semibold text-ink-100">OmniRoute · policy canonica</h2>
           <p className="mt-1 text-xs text-ink-400">Catalogo dichiarato e verifica nativa del controller ControlCenter; lo stato live richiede un'osservazione completa.</p>
         </div>
-        <button type="button" className="button-secondary" onClick={refresh} disabled={loading}>
+        <button type="button" className="button-secondary" onClick={reader.refresh} disabled={loading || !active}>
           {loading ? "Verifica in corso…" : "Verifica drift"}
         </button>
       </div>
@@ -56,8 +49,8 @@ export function OmniRoutePanel({ active }: { active: boolean }) {
       <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
         <div>
           <dt className="font-semibold text-ink-300">Policy dichiarativa</dt>
-          <dd className="mt-1 break-all text-ink-400">{policy?.source ?? "Caricamento…"}</dd>
-          <dd className="mt-1 text-ink-400">{policy?.available ? `${policy.model_count} modelli · SHA256 ${policy.sha256?.slice(0, 12)}…` : "Policy non disponibile"}</dd>
+          <dd className="mt-1 break-all text-ink-400">{policy?.source ?? (loading ? "Verifica in corso…" : "Fonte non disponibile")}</dd>
+          <dd className="mt-1 text-ink-400">{policy?.available ? `${policy.model_count} modelli · SHA256 ${policy.sha256?.slice(0, 12)}…` : loading ? "Verifica in corso…" : "Policy non disponibile"}</dd>
         </div>
         <div>
           <dt className="font-semibold text-ink-300">Fonte osservazione</dt>

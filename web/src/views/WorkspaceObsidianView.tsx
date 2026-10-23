@@ -1,65 +1,163 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { relativeTime, sourceReason } from "../lib/format";
 import type { WorkspaceSnapshot } from "../lib/types";
+import { ObsidianMarkdown } from "./obsidian/ObsidianMarkdown";
+import { inAllowedRoots, noteTree, type IndexedNote, type NoteFolder } from "./obsidian/model";
 
-export function ObsidianWorkspace({ snapshot, search, root, onSearch, onRoot, onSelect }: { snapshot: WorkspaceSnapshot; search: string; root: string; onSearch: (value: string) => void; onRoot: (value: string) => void; onSelect: (path: string) => void }) {
-  const [sort, setSort] = useState<"recent" | "title" | "path">("recent");
+type Props = {
+  snapshot: WorkspaceSnapshot;
+  search: string;
+  root: string;
+  onSearch: (value: string) => void;
+  onRoot: (value: string) => void;
+  onSelect: (path: string) => void;
+};
+type Sort = "recent" | "title" | "path";
+
+export function ObsidianWorkspace({ snapshot, search, root, onSearch, onRoot, onSelect }: Props) {
+  const [sort, setSort] = useState<Sort>("recent");
+  const [query, setQuery] = useState(search);
   const detailRef = useRef<HTMLElement>(null);
-  const selectedPath = snapshot.obsidian.selected?.path;
+  const selected = snapshot.obsidian.selected;
+  const selectedPath = selected?.path;
+  const searching = Boolean(search.trim());
+
+  useEffect(() => setQuery(search), [search]);
   useEffect(() => {
-    if (selectedPath && window.matchMedia("(max-width: 1279px)").matches) {
-      detailRef.current?.scrollIntoView({ block: "start" });
+    if (query === search) return;
+    const timeout = window.setTimeout(() => onSearch(query), 250);
+    return () => window.clearTimeout(timeout);
+  }, [query, search, onSearch]);
+  useEffect(() => {
+    if (selectedPath && window.matchMedia("(max-width: 1023px)").matches) {
+      detailRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     }
   }, [selectedPath]);
-  const silverBulletUrl = selectedPath?.startsWith("05-knowledge/")
-    ? `/notes/${selectedPath.slice("05-knowledge/".length).replace(/\.md$/, "").split("/").map(encodeURIComponent).join("/")}`
-    : null;
+
   const notes = useMemo(() => {
-    const filtered = snapshot.obsidian.results.filter((note) => root === "all" || note.path.startsWith(`${root}/`));
+    // `nodes` contains up to 180 indexed notes; `results` contains only 40 search matches.
+    const candidates = searching ? snapshot.obsidian.results : snapshot.obsidian.nodes;
+    const filtered = candidates.filter((note) => inAllowedRoots(note.path, snapshot.obsidian.allowlisted_roots) && (root === "all" || note.path.startsWith(`${root}/`)));
     return [...filtered].sort((a, b) => {
       if (sort === "title") return a.title.localeCompare(b.title, "it");
       if (sort === "path") return a.path.localeCompare(b.path, "it");
       return b.modified - a.modified;
     });
-  }, [root, snapshot.obsidian.results, sort]);
-  const folders = useMemo(() => {
-    const grouped = new Map<string, typeof notes>();
-    notes.forEach((note) => {
-      const folder = note.path.split("/").slice(0, -1).join("/") || "Root";
-      grouped.set(folder, [...(grouped.get(folder) ?? []), note]);
-    });
-    return [...grouped.entries()];
-  }, [notes]);
+  }, [root, searching, snapshot.obsidian.allowlisted_roots, snapshot.obsidian.nodes, snapshot.obsidian.results, sort]);
+  const folders = useMemo(() => noteTree(notes), [notes]);
+  const indexed = useMemo(() => {
+    const all = snapshot.obsidian.nodes;
+    return selected && !all.some((note) => note.path === selected.path) ? [...all, selected] : all;
+  }, [selected, snapshot.obsidian.nodes]);
+  const silverBulletUrl = selectedPath && inAllowedRoots(selectedPath, ["05-knowledge"])
+    ? `/notes/${selectedPath.slice("05-knowledge/".length).replace(/\.md$/, "").split("/").map(encodeURIComponent).join("/")}`
+    : null;
+
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <section className={`min-w-0 overflow-hidden rounded-xl border border-ink-800 bg-ink-900/45 ${selectedPath ? "order-2 xl:order-1" : ""}`}>
-        <div className="border-b border-ink-800 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold text-ink-100">Esplora Obsidian</h2><a href={silverBulletUrl ?? "/notes"} className="text-xs text-accent underline underline-offset-4">SilverBullet · 05-knowledge ↗</a></div>
-          <p className="mt-1 text-xs text-ink-400">Indice limitato e anteprima testuale in sola lettura. Solo la nota selezionata viene letta.</p>
-          <input aria-label="Cerca note Obsidian" value={search} onChange={(event) => onSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onSearch(event.currentTarget.value); }} placeholder="Cerca per titolo, path o metadata" className="mt-3 min-h-11 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 text-sm text-ink-100 placeholder:text-ink-600 focus-visible:outline-2 focus-visible:outline-accent" />
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <select aria-label="Filtra cartella Obsidian" value={root} onChange={(event) => onRoot(event.target.value)} className="min-h-11 rounded-lg border border-ink-700 bg-ink-950 px-3 text-sm text-ink-100 focus-visible:outline-2 focus-visible:outline-accent">
-              <option value="all">Tutte le cartelle</option>
-              {snapshot.obsidian.allowlisted_roots.map((folder) => <option key={folder} value={folder}>{folder}</option>)}
-            </select>
-            <select aria-label="Ordina note Obsidian" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} className="min-h-11 rounded-lg border border-ink-700 bg-ink-950 px-3 text-sm text-ink-100 focus-visible:outline-2 focus-visible:outline-accent">
-              <option value="recent">Modificate di recente</option>
-              <option value="title">Titolo A–Z</option>
-              <option value="path">Cartella e nome</option>
-            </select>
+    <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+      <section aria-label="Navigazione delle note Obsidian" className={`min-w-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900/60 ${selected ? "order-2 lg:order-1" : ""}`}>
+        <div className="border-b border-ink-700 p-4">
+          <h2 className="text-base font-semibold text-ink-100">Esplora il vault</h2>
+          <p className="mt-2 text-xs leading-5 text-ink-400">Indice parziale: massimo 180 note recenti per filtro; ricerca massima 40 risultati, solo su titolo, percorso e metadati. Il corpo non è indicizzato.</p>
+          <label htmlFor="obsidian-search" className="mt-4 block text-xs font-semibold text-ink-300">Cerca nelle note indicizzate</label>
+          <form onSubmit={(event) => { event.preventDefault(); onSearch(query); }} role="search" className="mt-2 flex min-w-0 gap-2">
+            <input id="obsidian-search" value={query} maxLength={120} onChange={(event) => setQuery(event.target.value)} placeholder="Titolo, percorso o metadati" className="min-h-11 min-w-0 flex-1 rounded-lg border border-ink-600 bg-ink-950 px-3 text-sm text-ink-100 placeholder:text-ink-400 focus-visible:outline-2 focus-visible:outline-ink-100" />
+            <button type="submit" className="min-h-11 rounded-lg border border-ink-600 px-3 text-xs font-semibold text-ink-100 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100">Cerca</button>
+          </form>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <label className="min-w-0 text-xs text-ink-400">Cartella
+              <select value={root} onChange={(event) => onRoot(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-ink-600 bg-ink-950 px-2 text-sm text-ink-100 focus-visible:outline-2 focus-visible:outline-ink-100">
+                <option value="all">Tutte le cartelle</option>
+                {snapshot.obsidian.allowlisted_roots.map((folder) => <option key={folder} value={folder}>{folder}</option>)}
+              </select>
+            </label>
+            <label className="min-w-0 text-xs text-ink-400">Ordine
+              <select value={sort} onChange={(event) => setSort(event.target.value as Sort)} className="mt-1 min-h-11 w-full rounded-lg border border-ink-600 bg-ink-950 px-2 text-sm text-ink-100 focus-visible:outline-2 focus-visible:outline-ink-100">
+                <option value="recent">Recenti</option>
+                <option value="title">Titolo A–Z</option>
+                <option value="path">Percorso A–Z</option>
+              </select>
+            </label>
           </div>
+          <p className="mt-3 text-xs text-ink-400" role="status">{notes.length} note mostrate{searching ? " (massimo 40 risultati)" : " (indice massimo 180)"}</p>
         </div>
-        {!snapshot.obsidian.source.available ? <p className="p-4 text-sm text-ink-400">{sourceReason(snapshot.obsidian.source.reason ?? "Vault non disponibile.")}</p> : notes.length ? <div className="divide-y divide-ink-800">{folders.map(([folder, folderNotes]) => <details key={folder} open={Boolean(search.trim())} className="group/folder"><summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 bg-ink-850 px-4 text-xs font-medium text-ink-300 hover:bg-ink-800"><span className="transition-transform group-open/folder:rotate-90">›</span><span>▢</span><span className="truncate">{folder}</span><span className="ml-auto tnum text-ink-500">{folderNotes.length}</span></summary><div className="divide-y divide-ink-850">{folderNotes.map((note) => <button key={note.path} type="button" onClick={() => onSelect(note.path)} className="flex min-h-14 w-full items-center gap-3 px-4 pl-8 text-left hover:bg-ink-850 focus-visible:outline-2 focus-visible:outline-accent"><span className="text-accent">⌁</span><span className="min-w-0 flex-1"><span className="block truncate text-sm text-ink-200">{note.title}</span><span className="block truncate text-[11px] text-ink-500">{note.path}</span></span><span className="shrink-0 text-[11px] text-ink-500">{relativeTime(note.modified)}</span></button>)}</div></details>)}</div> : <p className="p-5 text-sm text-ink-400">Nessuna nota corrisponde ai filtri.</p>}
+        {!snapshot.obsidian.source.available ? (
+          <p className="p-4 text-sm text-ink-400">{sourceReason(snapshot.obsidian.source.reason ?? "Vault non disponibile.")}</p>
+        ) : folders.length ? (
+          <nav aria-label="Albero delle note" className="max-h-[70vh] overflow-y-auto px-2 py-3">
+            {folders.map((folder) => <Folder key={`${search}:${folder.path}`} folder={folder} depth={0} searching={searching} selectedPath={selectedPath} onSelect={onSelect} />)}
+          </nav>
+        ) : (
+          <p className="p-4 text-sm text-ink-400">Nessuna nota nell'indice disponibile per questi filtri.</p>
+        )}
       </section>
-      <aside ref={detailRef} className={`min-w-0 rounded-xl border border-ink-800 bg-ink-900/45 p-4 ${selectedPath ? "order-1 xl:order-2" : ""}`}>
-        <p className="text-[10px] font-semibold tracking-[0.14em] text-ink-500 uppercase">Allowlist</p>
-        <p className="mt-2 text-xs leading-5 text-ink-400">{snapshot.obsidian.allowlisted_roots.join(" · ")}</p>
-        {snapshot.obsidian.selected && <><div className="mt-5 border-t border-ink-800 pt-4"><p className="text-[10px] font-semibold tracking-[0.12em] text-ink-500 uppercase">Puntatore canonico</p><h3 className="mt-2 text-sm font-semibold text-ink-100">{snapshot.obsidian.selected.title}</h3><p className="mt-1 break-words text-[11px] text-ink-500">{snapshot.obsidian.selected.path}</p><div className="mt-3 rounded-lg border border-ink-700 bg-ink-950 p-3"><p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">Nota · sola lettura</p><pre className="max-h-[50vh] w-full overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-ink-200">{snapshot.obsidian.selected.content}</pre>{snapshot.obsidian.selected.content_truncated && <p className="mt-2 text-xs text-ink-400">Anteprima limitata a 64 KiB.</p>}</div><a className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-ink-100 px-3 text-xs font-semibold text-ink-950 hover:opacity-85 focus-visible:outline-2 focus-visible:outline-accent" href={snapshot.obsidian.selected.open_uri}>Apri in Obsidian ↗</a></div><LinkList label="Puntatori in uscita" items={snapshot.obsidian.selected.links} onSelect={onSelect} /><LinkList label="Note che puntano qui" items={snapshot.obsidian.selected.backlinks} onSelect={onSelect} /></>}
-      </aside>
+      <article ref={detailRef} aria-label="Lettura nota Obsidian" className={`min-w-0 rounded-xl border border-ink-700 bg-ink-900/60 p-4 sm:p-6 ${selected ? "order-1 lg:order-2" : ""}`}>
+        {selected ? (
+          <>
+            <div className="border-b border-ink-700 pb-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Nota canonica · sola lettura</p>
+              <h2 className="mt-2 break-words text-xl font-semibold text-ink-100 sm:text-2xl">{selected.title}</h2>
+              <p className="mt-2 break-all font-mono text-xs text-ink-400">{selected.path}</p>
+              <p className="mt-2 text-xs text-ink-400">Modificata {relativeTime(selected.modified)} · {selected.size.toLocaleString("it-IT")} byte</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {selected.open_uri.startsWith("obsidian://open?") && <a className="inline-flex min-h-11 items-center rounded-lg border border-ink-600 px-3 text-xs font-semibold text-ink-100 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100" href={selected.open_uri}>Apri in Obsidian ↗</a>}
+                {silverBulletUrl && <a className="inline-flex min-h-11 items-center rounded-lg border border-ink-600 px-3 text-xs text-ink-100 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100" href={silverBulletUrl}>Apri in SilverBullet ↗</a>}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-ink-400">La modifica in Plancia richiede ancora un endpoint autorizzato del writer canonico con controllo versione e gestione dei conflitti.</p>
+            </div>
+            {selected.content_truncated && <p role="status" className="mt-4 rounded-lg border border-ink-600 p-3 text-xs text-ink-300">Anteprima troncata a 64 KiB: la nota potrebbe contenere altro testo.</p>}
+            <div className="mt-6"><ObsidianMarkdown content={selected.content} sourcePath={selected.path} indexed={indexed} allowedRoots={snapshot.obsidian.allowlisted_roots} onSelect={onSelect} /></div>
+            <div className="mt-8 grid gap-4 border-t border-ink-700 pt-4 sm:grid-cols-2">
+              <LinkList label="Wikilink in uscita" items={selected.links.filter((link) => inAllowedRoots(link.path, snapshot.obsidian.allowlisted_roots))} onSelect={onSelect} />
+              <LinkList label="Note che puntano qui" items={selected.backlinks.filter((link) => inAllowedRoots(link.path, snapshot.obsidian.allowlisted_roots))} onSelect={onSelect} />
+            </div>
+          </>
+        ) : (
+          <div className="py-8 text-center"><h2 className="text-lg font-semibold text-ink-100">Seleziona una nota</h2><p className="mt-2 text-sm text-ink-400">Scegli un file dall'albero per leggere Markdown e frontmatter dalla fonte canonica.</p></div>
+        )}
+      </article>
     </div>
   );
 }
 
-function LinkList({ label, items, onSelect }: { label: string; items: { title: string; path: string; open_uri: string }[]; onSelect: (path: string) => void }) {
-  return <div className="mt-4 border-t border-ink-800 pt-3"><p className="text-[10px] font-semibold tracking-[0.12em] text-ink-500 uppercase">{label}</p>{items.length ? <ul className="mt-2 space-y-1">{items.map((item) => <li key={item.path}><button type="button" onClick={() => onSelect(item.path)} className="min-h-11 w-full truncate rounded px-2 text-left text-xs text-accent hover:bg-ink-850 hover:underline focus-visible:outline-2 focus-visible:outline-accent" title={`${item.title} · ${item.path}`}>{item.title} →</button></li>)}</ul> : <p className="mt-2 text-xs text-ink-500">Nessuno</p>}</div>;
+function Folder({ folder, depth, searching, selectedPath, onSelect }: {
+  folder: NoteFolder;
+  depth: number;
+  searching: boolean;
+  selectedPath: string | undefined;
+  onSelect: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(depth === 0 || searching);
+  return <details open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)} className="group/folder">
+    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-left text-xs font-medium text-ink-200 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100" style={{ paddingLeft: `${8 + depth * 14}px` }}>
+      <span aria-hidden="true" className="inline-block transition-transform group-open/folder:rotate-90">›</span>
+      <span className="min-w-0 flex-1 break-words">{folder.name}</span>
+      <span className="shrink-0 tabular-nums text-ink-400">{folder.count}</span>
+    </summary>
+    <div>
+      {folder.notes.map((note) => <NoteButton key={note.path} note={note} depth={depth + 1} selected={note.path === selectedPath} onSelect={onSelect} />)}
+      {folder.folders.map((nested) => <Folder key={nested.path} folder={nested} depth={depth + 1} searching={searching} selectedPath={selectedPath} onSelect={onSelect} />)}
+    </div>
+  </details>;
+}
+
+function NoteButton({ note, depth, selected, onSelect }: {
+  note: IndexedNote;
+  depth: number;
+  selected: boolean;
+  onSelect: (path: string) => void;
+}) {
+  return <button type="button" aria-current={selected ? "page" : undefined} onClick={() => onSelect(note.path)} className={`flex min-h-11 w-full items-center gap-2 rounded-lg py-2 pr-2 text-left text-xs focus-visible:outline-2 focus-visible:outline-ink-100 ${selected ? "bg-ink-700 font-semibold text-ink-100" : "text-ink-300 hover:bg-ink-800"}`} style={{ paddingLeft: `${8 + depth * 14}px` }}>
+    <span aria-hidden="true" className="shrink-0">◇</span><span className="min-w-0 flex-1 break-words">{note.title}</span>
+  </button>;
+}
+
+function LinkList({ label, items, onSelect }: {
+  label: string;
+  items: { title: string; path: string; open_uri: string }[];
+  onSelect: (path: string) => void;
+}) {
+  return <section aria-label={label}><h3 className="text-xs font-semibold uppercase tracking-wide text-ink-400">{label}</h3>
+    {items.length ? <ul className="mt-2 space-y-1">{items.map((item) => <li key={item.path}><button type="button" onClick={() => onSelect(item.path)} className="min-h-11 w-full rounded px-2 py-2 text-left text-sm text-ink-200 underline decoration-ink-600 underline-offset-2 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-ink-100">{item.title}</button></li>)}</ul> : <p className="mt-2 text-xs text-ink-400">Nessuna nota nell'indice disponibile.</p>}
+  </section>;
 }
