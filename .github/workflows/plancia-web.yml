@@ -1,0 +1,38 @@
+name: Plancia web
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plancia-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Plancia web / build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, MIT
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0, MIT
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm run build
+      - run: npm test
+      - run: npm audit --audit-level=high
+      - name: Verify release assets
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: node scripts/check-release.mjs --dist dist --source-sha "$SOURCE_SHA"
