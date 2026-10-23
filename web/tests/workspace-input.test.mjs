@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createServer } from "vite";
-import { createElement } from "react";
+import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 let vite;
@@ -189,4 +189,112 @@ test("successful apply permanently consumes packet across editor remount while r
   assert.match(remounted, /r1/);
   const wrongRow = renderToStaticMarkup(createElement(NotionEditPanel, { ...base, row: { ...base.row, id: "B" } }));
   assert.doesNotMatch(wrongRow, /Ripristina modifica/);
+});
+
+// A tiny synchronous hook harness runs the actual NotionEditPanel function and
+// its event handlers (not just static SSR markup), with zero DOM/test dependencies.
+function hookPanelHarness(Component) {
+  const hooks = [];
+  const internals = React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+  let index = 0;
+  let effects = [];
+  let changed = false;
+  const dispatcher = {
+    useState(initial) {
+      const slot = index++;
+      if (!Object.hasOwn(hooks, slot)) hooks[slot] = typeof initial === "function" ? initial() : initial;
+      return [hooks[slot], (value) => {
+        const next = typeof value === "function" ? value(hooks[slot]) : value;
+        if (!Object.is(next, hooks[slot])) { hooks[slot] = next; changed = true; }
+      }];
+    },
+    useRef(initial) {
+      const slot = index++;
+      return hooks[slot] ??= { current: initial };
+    },
+    useEffect(effect, deps) {
+      const slot = index++;
+      const previous = hooks[slot];
+      if (!previous || deps.some((value, i) => !Object.is(value, previous.deps[i]))) {
+        effects.push(() => {
+          previous?.cleanup?.();
+          hooks[slot] = { deps, cleanup: effect() };
+        });
+      }
+    },
+  };
+  return {
+    render(props) {
+      let tree;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        index = 0;
+        effects = [];
+        changed = false;
+        const former = internals.H;
+        internals.H = dispatcher;
+        try { tree = Component(props); } finally { internals.H = former; }
+        for (const run of effects) run();
+        if (!changed) return tree;
+      }
+      assert.fail("Hook effects did not stabilize");
+    },
+  };
+}
+
+function findElement(tree, tag, matches = () => true) {
+  if (Array.isArray(tree)) return tree.map((child) => findElement(child, tag, matches)).find(Boolean);
+  if (!tree || typeof tree !== "object" || !tree.props) return null;
+  if (tree.type === tag && matches(tree)) return tree;
+  return findElement(tree.props.children, tag, matches);
+}
+
+test("same-row preview P2 is savable while P1 apply is in-flight; P1 finally cannot clear P2 pending", async () => {
+  const view = hookPanelHarness(NotionEditPanel);
+  const row = { id: "A", title: "Action A", properties: { Status: "Todo" }, url: null };
+  const makePreview = (packetId, status) => ({
+    ...packet("A", { Status: status }), packet_id: packetId,
+    before: { Status: "Todo" }, preimage_hash: `hash-${packetId}`, receipt_id: `preview-${packetId}`,
+  });
+  const p1 = makePreview("P1", "Doing");
+  const p2 = makePreview("P2", "Done");
+  const remote1 = deferred();
+  const remote2 = deferred();
+  const writes = [];
+  const receipts = [];
+  const props = { row, schema: [], draft: {}, packet: p1, applied: null,
+    onDraft: () => {}, onPreview: () => {}, isPacketCurrent: () => true,
+    onApply: (submitted) => { writes.push(submitted); return submitted === p1 ? remote1.promise : remote2.promise; },
+    onApplied: (result, submitted) => receipts.push([submitted, result.receipt_id]),
+    onRolledBack: () => {}, onReplayRolledBack: () => {},
+  };
+  const render = () => view.render(props);
+  const applyButton = () => findElement(render(), "button", (el) => el.props.children === "Salva su Notion" || el.props.children === "Salvataggio…");
+  function confirmAndSave() {
+    const input = findElement(render(), "input");
+    assert.ok(input, "Confirmation input exists for preview");
+    input.props.onChange({ target: { value: "APPLICA" } });
+    const save = applyButton();
+    assert.equal(save.props.disabled, false, `Packet ${props.packet.packet_id} should be savable`);
+    save.props.onClick();
+  }
+
+  confirmAndSave(); // P1 starts, remains pending at the canonical writer.
+  assert.equal(applyButton().props.children, "Salvataggio…");
+  props.packet = p2; // Same row, no component remount: draft changed and preview P2 arrived.
+  confirmAndSave(); // P2 must be separately usable, not blocked by P1's boolean flag.
+  assert.deepEqual(writes, [p1, p2]);
+  assert.equal(applyButton().props.children, "Salvataggio…");
+
+  remote1.resolve({ status: "applied", row, registry_id: "registry-P1", receipt_id: "receipt-P1" });
+  await remote1.promise;
+  await new Promise((resolve) => setImmediate(resolve)); // settle P1 .then/.finally
+  assert.deepEqual(receipts, [[p1, "receipt-P1"]]);
+  assert.equal(applyButton().props.children, "Salvataggio…", "P1 finally must not clear P2 pending state");
+  assert.doesNotMatch(renderToStaticMarkup(render()), /receipt-P1/);
+
+  remote2.resolve({ status: "applied", row, registry_id: "registry-P2", receipt_id: "receipt-P2" });
+  await remote2.promise;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(receipts, [[p1, "receipt-P1"], [p2, "receipt-P2"]]);
+  assert.equal(applyButton().props.children, "Salva su Notion", "P2 pending clears when P2 settles");
 });

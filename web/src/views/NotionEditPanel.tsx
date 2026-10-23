@@ -21,7 +21,9 @@ export function NotionEditPanel({ row, schema, draft, packet, applied, onDraft, 
 }) {
   const [confirmation, setConfirmation] = useState("");
   const [applyState, setApplyState] = useState<string | null>(null);
-  const [applying, setApplying] = useState(false);
+  // Pending state belongs to the preview that was submitted, not to the row.
+  // A newer preview on the same row must not inherit an older request's spinner.
+  const [applyingPacket, setApplyingPacket] = useState<WorkspaceActionItemOperationPacket | null>(null);
   const [rollbackConfirmation, setRollbackConfirmation] = useState("");
   const [rollingBack, setRollingBack] = useState(false);
   const identity = useRef(createNotionPanelIdentity()).current;
@@ -39,6 +41,7 @@ export function NotionEditPanel({ row, schema, draft, packet, applied, onDraft, 
   }, [packet?.packet_id, row?.id, currentApplied?.receiptId]);
   const editable = schema.filter((column) => column.editable);
   const currentPacket = packet && row?.id === packet.row_id && isPacketCurrent(packet) ? packet : null;
+  const applying = currentPacket !== null && applyingPacket === currentPacket;
   return (
     <aside className="rounded-xl border border-ink-800 bg-ink-900/45 p-4">
       <div className="border-b border-ink-800 pb-3">
@@ -91,7 +94,7 @@ export function NotionEditPanel({ row, schema, draft, packet, applied, onDraft, 
                 onClick={() => {
                   if (!isPacketCurrent(currentPacket) || row?.id !== currentPacket.row_id) return;
                   const rowId = row.id;
-                  setApplying(true);
+                  setApplyingPacket(currentPacket);
                   setApplyState(null);
                   void onApply(currentPacket, confirmation)
                     .then((result) => {
@@ -113,7 +116,11 @@ export function NotionEditPanel({ row, schema, draft, packet, applied, onDraft, 
                       if (identity.matchesApply(rowId, currentPacket)) setApplyState(reason.message);
                     })
                     .finally(() => {
-                      if (identity.matchesApply(rowId, currentPacket)) setApplying(false);
+                      // Only clear this exact request. P1 finishing must never
+                      // dismiss P2's spinner or strand P2 behind P1's spinner.
+                      if (identity.isMounted()) {
+                        setApplyingPacket((pending) => pending === currentPacket ? null : pending);
+                      }
                     });
                 }}
                 className="min-h-11 w-full rounded-lg bg-ink-100 px-3 font-semibold text-ink-950 focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40"

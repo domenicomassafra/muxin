@@ -15,6 +15,7 @@ export function createNotionPanelIdentity() {
     },
     reactivate() { mounted = true; },
     dispose() { mounted = false; },
+    isMounted() { return mounted; },
     matchesApply(requestRow: string, packet: RowPacket) {
       return mounted && rowId === requestRow && preview === packet;
     },
