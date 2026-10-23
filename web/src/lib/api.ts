@@ -45,7 +45,7 @@ async function bootstrapSession(): Promise<void> {
   if (!response.ok) throw new Error(`Session bootstrap failed: ${response.status}`);
 }
 
-async function request<T>(path: string, init?: RequestInit, retrySession = true): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit, retrySession = true): Promise<T> {
   const method = init?.method ?? "GET";
   const headers = new Headers(init?.headers);
   if (method !== "GET") {

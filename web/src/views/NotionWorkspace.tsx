@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { sourceReason } from "../lib/format";
 import { NotionEditPanel } from "./NotionEditPanel";
+import { NotionCalendar } from "./NotionCalendar";
+import { actionDate, romeToday } from "./notionDates";
 import type { WorkspaceActionItemOperationPacket, WorkspaceActionItemOperationApplyResult, WorkspaceActionItemOperationAppliedResult, WorkspaceNotionRollbackResult, WorkspaceNotionRow, WorkspaceNotion } from "../lib/types";
 
 export interface AppliedNotionPacket { packet: WorkspaceActionItemOperationPacket; receiptId: string }
@@ -25,6 +27,8 @@ export function NotionWorkspace({ notion, selectedRow, draft, packet, applied, l
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"recent" | "title" | "status">("recent");
   const [statusFilter, setStatusFilter] = useState("");
+  const [view, setView] = useState<"table" | "today" | "calendar">("table");
+  const [month, setMonth] = useState(() => romeToday().slice(0, 7));
   const statusColumn = notion.schema.find((column) => column.type === "status" || column.name.toLowerCase() === "status");
   const statuses = useMemo(() => statusColumn
     ? [...new Set([...statusColumn.options, ...notion.rows.map((row) => row.properties[statusColumn.name])
@@ -39,6 +43,7 @@ export function NotionWorkspace({ notion, selectedRow, draft, packet, applied, l
   const visibleRows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("it");
     const rows = notion.rows.filter((row) => {
+      if (view === "today" && actionDate(row) !== romeToday()) return false;
       if (statusColumn && statusFilter && statuses.includes(statusFilter) && row.properties[statusColumn.name] !== statusFilter) return false;
       if (!needle) return true;
       return [row.title, ...Object.values(row.properties)]
@@ -54,7 +59,7 @@ export function NotionWorkspace({ notion, selectedRow, draft, packet, applied, l
       }
       return String(b.last_edited_time ?? "").localeCompare(String(a.last_edited_time ?? ""));
     });
-  }, [notion.rows, query, sort, statusColumn, statusFilter, statuses]);
+  }, [notion.rows, query, sort, statusColumn, statusFilter, statuses, view]);
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="min-w-0 overflow-hidden rounded-xl border border-ink-800 bg-ink-900/45">
@@ -66,6 +71,9 @@ export function NotionWorkspace({ notion, selectedRow, draft, packet, applied, l
           <span className="rounded border border-ink-700 px-2 py-1 text-[10px] text-ink-400">
             Preview + Registry
           </span>
+        </div>
+        <div role="group" aria-label="Vista Actions" className="flex flex-wrap gap-2 border-b border-ink-800 p-3">
+          {([ ["table", "Tabella"], ["today", "Oggi"], ["calendar", "Calendario"] ] as const).map(([id, label]) => <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)} className={`min-h-11 rounded-lg border border-ink-700 px-3 text-sm text-ink-100 ${view === id ? "bg-ink-700" : "hover:bg-ink-800"}`}>{label}</button>)}
         </div>
         <div className="grid gap-2 border-b border-ink-800 p-3 sm:grid-cols-2 lg:grid-cols-[160px_minmax(0,1fr)_160px_160px]">
           <div className="flex min-h-11 items-center rounded-lg border border-ink-700 bg-ink-950 px-3 text-sm font-medium text-ink-200">
@@ -101,7 +109,7 @@ export function NotionWorkspace({ notion, selectedRow, draft, packet, applied, l
         </div>
         {!notion.source.available ? (
           <p className="p-4 text-sm text-ink-400">{sourceReason(notion.source.reason ?? "Notion non disponibile.")}</p>
-        ) : (
+        ) : view === "calendar" ? <NotionCalendar rows={visibleRows} month={month} onMonth={setMonth} onSelect={onSelect} /> : (
           <div className="overflow-x-auto">
             <table className="min-w-[680px] w-full text-left text-xs">
               <thead className="border-b border-ink-800 text-[10px] tracking-[0.12em] text-ink-500 uppercase">
