@@ -16,9 +16,9 @@ import { OverviewView } from "./views/OverviewView";
 import { ProfilesView } from "./views/ProfilesView";
 import { WorkspaceView } from "./views/WorkspaceView";
 
-type View = "overview" | "fleet" | "profiles" | "workspace" | "audit";
+type View = "overview" | "fleet" | "agents" | "profiles" | "workspace" | "audit";
 
-const VIEWS = new Set<View>(["overview", "fleet", "profiles", "workspace", "audit"]);
+const VIEWS = new Set<View>(["overview", "fleet", "agents", "profiles", "workspace", "audit"]);
 
 function viewFromLocation(): View {
   const candidate = window.location.hash.replace(/^#\/?/, "") as View;
@@ -28,6 +28,7 @@ function viewFromLocation(): View {
 const NAV_PATHS: { id: View; label: string; path: string }[] = [
   { id: "overview", label: "Panoramica", path: "M4 13h6V4H4zM14 20h6v-7h-6zM14 9h6V4h-6zM4 20h6v-3H4z" },
   { id: "fleet", label: "Flotta", path: "M4 6h7v5H4zM13 6h7v5h-7zM4 13h7v5H4zM13 13h7v5h-7z" },
+  { id: "agents", label: "Agenti", path: "M9 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM17 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM4 18v-2a5 5 0 0 1 10 0v2H4ZM15 14a4 4 0 0 1 5 4h-4" },
   { id: "profiles", label: "Account", path: "M3 5h18v14H3zM3 9h18M6 7h.01M9 7h.01" },
   { id: "workspace", label: "Workspace", path: "M6 3h10l3 3v15H6zM16 3v4h4M9 11h7M9 15h7" },
   { id: "audit", label: "Audit", path: "M4 19h16M5 15l4-4 3 3 7-8M17 6h2v2" },
@@ -100,8 +101,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const label = NAV_PATHS.find((entry) => entry.id === view)?.label ?? "Signal Deck";
-    document.title = `${label} · Signal Deck`;
+    const label = NAV_PATHS.find((entry) => entry.id === view)?.label ?? "Plancia";
+    document.title = `${label} · Plancia`;
   }, [view]);
 
   useEffect(
@@ -213,60 +214,37 @@ export default function App() {
   const statusInfo = STATUS_COPY[status];
 
   return (
-    <div className="flex min-h-full flex-col bg-ink-950 lg:flex-row">
-      <nav
-        className="sticky top-0 z-30 flex shrink-0 items-center gap-1 border-b border-ink-800 bg-ink-950/90 px-3 py-2 backdrop-blur-xl lg:h-screen lg:w-64 lg:flex-col lg:items-stretch lg:border-r lg:border-b-0 lg:px-3 lg:py-5"
-        aria-label="Navigazione principale"
-      >
-        <div className="mr-2 flex items-center gap-2.5 lg:mr-0 lg:mb-7 lg:px-2">
-          <span className="grid h-9 w-9 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4.5 w-4.5">
-              <path d="M4 14h4l2-6 3 12 2.5-6H20" />
-            </svg>
-          </span>
-          <div className="hidden lg:block">
-            <p className="text-sm font-semibold tracking-tight text-ink-100">Signal Deck</p>
-            <p className="text-[10px] tracking-[0.14em] text-ink-400 uppercase">
-              Control Center
-            </p>
-          </div>
+    <div data-app-surface="plancia" className="flex min-h-full min-w-0 flex-col bg-ink-950 lg:flex-row">
+      <a className="skip-link" href="#main-content" onClick={(event) => {
+        event.preventDefault();
+        document.getElementById("main-content")?.focus();
+      }}>Vai al contenuto</a>
+      <header className="mobile-header sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-ink-800 bg-ink-950 px-4 lg:hidden">
+        <Brand />
+        <ConnectionStatus status={statusInfo} />
+      </header>
+      <aside className="hidden h-screen w-60 shrink-0 flex-col border-r border-ink-800 bg-ink-900 px-4 py-6 lg:sticky lg:top-0 lg:flex">
+        <div className="mb-10 px-2"><Brand /></div>
+        <nav aria-label="Navigazione principale" className="flex flex-col gap-1">
+          {NAV.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => navigate(entry.id)}
+              aria-current={view === entry.id ? "page" : undefined}
+              className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                view === entry.id ? "bg-ink-800 text-ink-100" : "text-ink-300 hover:bg-ink-850 hover:text-ink-100"
+              }`}
+            >
+              {entry.icon}<span>{entry.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="mt-auto border-t border-ink-800 px-2 pt-5">
+          <ConnectionStatus status={statusInfo} />
         </div>
-
-        <p className="mb-2 hidden px-3 text-[10px] font-semibold tracking-[0.14em] text-ink-500 uppercase lg:block">
-          Control plane
-        </p>
-        {NAV.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            onClick={() => navigate(entry.id)}
-            aria-label={entry.label}
-            aria-current={view === entry.id ? "page" : undefined}
-            className={`flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-              view === entry.id
-                ? "bg-ink-800 text-ink-100"
-                : "text-ink-300 hover:bg-ink-850 hover:text-ink-100"
-            }`}
-          >
-            {entry.icon}
-            <span className="hidden sm:inline">{entry.label}</span>
-          </button>
-        ))}
-
-        <div
-          data-app-surface="signal-deck"
-          data-version="3.0.0"
-          className="ml-auto flex min-h-11 items-center justify-between gap-2 rounded-lg lg:mt-auto lg:ml-0 lg:border lg:border-ink-700 lg:bg-ink-900/70 lg:px-3"
-        >
-          <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${statusInfo.tone}`} />
-            <span className="hidden text-[11px] text-ink-300 lg:inline">{statusInfo.text}</span>
-          </div>
-          <span className="hidden text-[9px] font-mono text-ink-500 lg:inline">v3.0</span>
-        </div>
-      </nav>
-
-      <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+      </aside>
+      <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 px-4 pt-5 pb-28 outline-none sm:px-6 lg:px-8 lg:py-7">
         <div className="mx-auto max-w-[1540px]">
           <section hidden={view !== "overview"}>
             {visited.has("overview") && (
@@ -302,6 +280,18 @@ export default function App() {
               <SkeletonFleet />
             ))}
           </section>
+          <section hidden={view !== "agents"} aria-label="Agenti">
+            {visited.has("agents") && (
+              <div className="panel max-w-3xl p-6 sm:p-8">
+                <h1 className="text-2xl font-semibold text-ink-100">Agenti</h1>
+                <p className="mt-3 max-w-prose text-sm leading-6 text-ink-300">
+                  La console agenti è disponibile sullo stesso origin, con accesso governato dalla sessione owner.
+                  Le capacità di visualizzazione e invio dipendono dal server e dalla sessione originale.
+                </p>
+                <a className="button-secondary mt-6 inline-flex items-center" href="/agents">Apri la console agenti</a>
+              </div>
+            )}
+          </section>
           <section hidden={view !== "profiles"}>
             {visited.has("profiles") && <ProfilesView active={view === "profiles"} initialFleet={profiles} onInventory={setProfiles} />}
           </section>
@@ -315,6 +305,23 @@ export default function App() {
           </section>
         </div>
       </main>
+      <nav aria-label="Navigazione principale" className="mobile-dock fixed inset-x-0 bottom-0 z-40 border-t border-ink-700 bg-ink-900 lg:hidden">
+        <div className="mobile-dock-grid mx-auto grid max-w-xl grid-cols-6 px-1">
+          {NAV.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => navigate(entry.id)}
+              aria-current={view === entry.id ? "page" : undefined}
+              className={`mobile-dock-item flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-center font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent ${
+                view === entry.id ? "bg-ink-800 text-ink-100" : "text-ink-300"
+              }`}
+            >
+              {entry.icon}<span className="mobile-dock-label">{entry.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
 
       {selected && (
         <HostDetail
@@ -328,13 +335,35 @@ export default function App() {
   );
 }
 
+function Brand() {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-ink-600 bg-ink-800 text-ink-100">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+          <path d="M6 20V4h8a4 4 0 0 1 0 8H6" />
+        </svg>
+      </span>
+      <span className="text-base font-semibold tracking-tight text-ink-100">Plancia</span>
+    </div>
+  );
+}
+
+function ConnectionStatus({ status }: { status: { text: string; tone: string } }) {
+  return (
+    <div role="status" aria-live="polite" className="flex min-w-0 items-center gap-2 text-right text-[11px] leading-4 text-ink-300">
+      <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${status.tone}`} />
+      <span>{status.text}</span>
+    </div>
+  );
+}
+
 function FleetUnavailable({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="rounded-xl border border-signal-crit/25 bg-signal-crit/5 p-6">
       <p className="eyebrow">Flotta</p>
       <h1 className="mt-2 text-xl font-semibold text-ink-100">Telemetria non raggiungibile</h1>
       <p role="status" className="mt-2 max-w-2xl text-sm leading-6 text-ink-400">
-        Signal Deck non ha ancora ricevuto un campione né una risposta HTTP valida. Lo stato di alimentazione dei computer resta sconosciuto finché il control plane non risponde.
+        Plancia non ha ancora ricevuto un campione né una risposta HTTP valida. Lo stato di alimentazione dei computer resta sconosciuto finché il control plane non risponde.
       </p>
       <button type="button" onClick={onRetry} className="button-secondary mt-4">
         Riprova connessione
