@@ -1,0 +1,34 @@
+{
+  "name": "plancia-web",
+  "private": true,
+  "version": "3.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "npm run test:stream && npm run test:profile-groups && npm run test:receipts && npm run test:action-item-operation && npm run test:workspace-input && npm run test:device-image && npm run test:format && npm run test:overview && npm run test:history",
+    "test:history": "node --experimental-strip-types tests/history-ranges.test.ts",
+    "test:device-image": "node --no-warnings --test tests/device-image.test.mjs",
+    "test:overview": "node --experimental-strip-types tests/overview-state.test.ts",
+    "test:stream": "node --experimental-strip-types --test tests/stream-auth.test.ts",
+    "test:receipts": "node --no-warnings --test tests/receipt-evidence.test.mjs",
+    "test:action-item-operation": "tsc --noEmit --strict --target ES2022 --lib ES2022,DOM,DOM.Iterable --module ESNext --moduleResolution bundler --skipLibCheck --isolatedModules --verbatimModuleSyntax tests/action-item-operation.test.ts",
+    "test:workspace-input": "node --test tests/workspace-input.test.mjs",
+    "test:profile-groups": "node --experimental-strip-types tests/profile-groups.test.ts",
+    "test:format": "node --experimental-strip-types tests/format.test.ts"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tailwindcss": "^4.1.14",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9"
+  }
+}
