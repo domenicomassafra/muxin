@@ -1,6 +1,7 @@
 // The canonical writer accepts a preview packet as an apply input. Only a
 // packet produced for the currently selected row and draft may reach it.
 interface PreviewPacket {
+  packet_id: string;
   row_id: string;
   changes: Record<string, unknown>;
   apply_allowed: boolean;
@@ -26,6 +27,9 @@ export function notionDraftChanges(
 export function createNotionPreviewGate() {
   let revision = 0;
   let accepted: PreviewPacket | null = null;
+  const inFlight = new WeakSet<PreviewPacket>();
+  const consumed = new WeakSet<PreviewPacket>();
+  const consumedIds = new Set<string>();
 
   const invalidate = () => {
     revision += 1;
@@ -34,7 +38,7 @@ export function createNotionPreviewGate() {
 
   return {
     invalidate,
-    isCurrent: (packet: PreviewPacket) => accepted === packet && packet.apply_allowed,
+    isCurrent: (packet: PreviewPacket) => accepted === packet && packet.apply_allowed && !consumed.has(packet) && !consumedIds.has(packet.packet_id),
     async preview<P extends PreviewPacket>({ rowId, changes, fetchPacket, onReady, onError }: {
       rowId: string;
       changes: Record<string, unknown>;
@@ -47,7 +51,7 @@ export function createNotionPreviewGate() {
       try {
         const packet = await fetchPacket();
         if (requestedRevision !== revision) return;
-        if (packet.row_id !== rowId || !equalChanges(packet.changes, changes) || !packet.apply_allowed) {
+        if (packet.row_id !== rowId || !equalChanges(packet.changes, changes) || !packet.apply_allowed || consumedIds.has(packet.packet_id)) {
           onError("Preview non coerente con la riga o il draft. Ricarica e prepara una nuova preview.");
           return;
         }
@@ -59,11 +63,21 @@ export function createNotionPreviewGate() {
         }
       }
     },
-    apply<P extends PreviewPacket, R>(packet: P, confirmation: string, submit: (packet: P, confirmation: string) => Promise<R>): Promise<R> {
-      if (accepted !== packet || !packet.apply_allowed) {
+    async apply<P extends PreviewPacket, R>(packet: P, confirmation: string, submit: (packet: P, confirmation: string) => Promise<R>): Promise<R> {
+      if (accepted !== packet || !packet.apply_allowed || inFlight.has(packet) || consumed.has(packet) || consumedIds.has(packet.packet_id)) {
         return Promise.reject(new Error("Preview scaduta: prepara una nuova preview prima di applicare."));
       }
-      return submit(packet, confirmation);
+      inFlight.add(packet);
+      try {
+        const result = await submit(packet, confirmation);
+        // Even when the user is now on row B, A is permanently consumed.
+        consumed.add(packet);
+        consumedIds.add(packet.packet_id);
+        if (accepted === packet) invalidate();
+        return result;
+      } finally {
+        inFlight.delete(packet);
+      }
     },
   };
 }

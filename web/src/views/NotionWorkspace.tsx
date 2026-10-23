@@ -3,11 +3,14 @@ import { sourceReason } from "../lib/format";
 import { NotionEditPanel } from "./NotionEditPanel";
 import type { WorkspaceActionItemOperationPacket, WorkspaceActionItemOperationApplyResult, WorkspaceActionItemOperationAppliedResult, WorkspaceNotionRollbackResult, WorkspaceNotionRow, WorkspaceNotion } from "../lib/types";
 
-export function NotionWorkspace({ notion, selectedRow, draft, packet, loadingMore, onSelect, onDraft, onPreview, isPacketCurrent, onApply, onApplied, onRolledBack, onReplayRolledBack, onLoadMore }: {
+export interface AppliedNotionPacket { packet: WorkspaceActionItemOperationPacket; receiptId: string }
+
+export function NotionWorkspace({ notion, selectedRow, draft, packet, applied, loadingMore, onSelect, onDraft, onPreview, isPacketCurrent, onApply, onApplied, onRolledBack, onReplayRolledBack, onLoadMore }: {
   notion: WorkspaceNotion;
   selectedRow: WorkspaceNotionRow | null;
   draft: Record<string, unknown>;
   packet: WorkspaceActionItemOperationPacket | null;
+  applied: AppliedNotionPacket | null;
   loadingMore: boolean;
   onSelect: (row: WorkspaceNotionRow) => void;
   onDraft: (draft: Record<string, unknown>) => void;
@@ -15,7 +18,7 @@ export function NotionWorkspace({ notion, selectedRow, draft, packet, loadingMor
   isPacketCurrent: (packet: WorkspaceActionItemOperationPacket) => boolean;
   onApply: (packet: WorkspaceActionItemOperationPacket, confirmation: string) => Promise<WorkspaceActionItemOperationApplyResult>;
   onApplied: (result: WorkspaceActionItemOperationAppliedResult, packet: WorkspaceActionItemOperationPacket) => void;
-  onRolledBack: (result: WorkspaceNotionRollbackResult) => void;
+  onRolledBack: (result: WorkspaceNotionRollbackResult, packet: WorkspaceActionItemOperationPacket) => void;
   onReplayRolledBack: () => void;
   onLoadMore: () => void;
 }) {
@@ -148,10 +151,12 @@ export function NotionWorkspace({ notion, selectedRow, draft, packet, loadingMor
       </section>
 
       <NotionEditPanel
+        key={selectedRow?.id ?? "no-row"}
         row={selectedRow}
         schema={notion.schema}
         draft={draft}
         packet={packet}
+        applied={applied}
         onDraft={onDraft}
         onPreview={onPreview}
         isPacketCurrent={isPacketCurrent}

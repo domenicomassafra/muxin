@@ -8,12 +8,14 @@ let vite;
 let NotionTypedInput;
 let createNotionPreviewGate;
 let NotionEditPanel;
+let createNotionPanelIdentity;
 
 before(async () => {
   vite = await createServer({ appType: "custom", logLevel: "silent", server: { middlewareMode: true } });
   ({ NotionTypedInput } = await vite.ssrLoadModule("/src/components/NotionTypedInput.tsx"));
   ({ createNotionPreviewGate } = await vite.ssrLoadModule("/src/views/notionPreviewGate.ts"));
   ({ NotionEditPanel } = await vite.ssrLoadModule("/src/views/NotionEditPanel.tsx"));
+  ({ createNotionPanelIdentity } = await vite.ssrLoadModule("/src/views/notionPanelIdentity.ts"));
 });
 
 after(async () => {
@@ -133,4 +135,58 @@ test("Notion editor exposes all editable properties, before/after values and onl
 
   const stale = renderToStaticMarkup(createElement(NotionEditPanel, { ...props, packet: packet("row-a", { "Property 9": "wrong" }) }));
   assert.doesNotMatch(stale, /Salva su Notion/);
+});
+
+test("apply of A resolving after selecting and previewing B never contaminates B or enables rollback B", async () => {
+  const gate = createNotionPreviewGate();
+  const lifecycle = createNotionPanelIdentity();
+  const patchA = packet("A", { Status: "Doing" });
+  const patchB = { ...packet("B", { Status: "Done" }), before: { Status: "Doing" }, preimage_hash: "digest-B", receipt_id: "preview-B" };
+  const preview = (p) => gate.preview({ rowId: p.row_id, changes: p.changes, fetchPacket: async () => p, onReady: () => {}, onError: assert.fail });
+  await preview(patchA);
+  lifecycle.sync("A", patchA);
+  const delayed = deferred();
+  const applied = gate.apply(patchA, "APPLICA", () => delayed.promise);
+  lifecycle.sync("B", null); // row changes while canonical writer works
+  gate.invalidate();
+  await preview(patchB);
+  lifecycle.sync("B", patchB);
+  delayed.resolve({ status: "applied", row: { id: "A" }, receipt_id: "receipt-A" });
+  const result = await applied;
+  assert.equal(lifecycle.matchesApply("A", patchA), false);
+  assert.equal(lifecycle.matchesApply("B", patchB), true);
+  assert.equal(gate.isCurrent(patchB), true);
+  assert.equal(gate.isCurrent(patchA), false);
+  assert.equal(result.receipt_id, "receipt-A");
+
+  const base = { row: { id: "B", title: "B", properties: {}, url: null }, schema: [], draft: {}, packet: patchB,
+    onDraft: () => {}, onPreview: () => {}, onApply: async () => {}, onApplied: () => {}, onRolledBack: () => {},
+    onReplayRolledBack: () => {}, isPacketCurrent: (p) => p === patchB };
+  const html = renderToStaticMarkup(createElement(NotionEditPanel, { ...base, applied: { packet: patchA, receiptId: result.receipt_id } }));
+  assert.doesNotMatch(html, /Ripristina modifica|receipt-A/);
+});
+
+test("successful apply permanently consumes packet across editor remount while rollback uses its own packet", async () => {
+  const gate = createNotionPreviewGate();
+  const saved = packet("A", { Status: "Done" });
+  await gate.preview({ rowId: "A", changes: saved.changes, fetchPacket: async () => saved, onReady: () => {}, onError: assert.fail });
+  const writer = [];
+  const receipt = await gate.apply(saved, "APPLICA", async (p) => { writer.push(p); return { status: "applied", receipt_id: "r1" }; });
+  assert.equal(gate.isCurrent(saved), false);
+  await assert.rejects(gate.apply(saved, "APPLICA", async (p) => writer.push(p)), /scaduta|consumat/i);
+  assert.deepEqual(writer, [saved]);
+  const repeatPreviewErrors = [];
+  await gate.preview({ rowId: "A", changes: saved.changes, fetchPacket: async () => ({ ...saved }), onReady: () => assert.fail("Duplicate logical packet accepted"), onError: (message) => repeatPreviewErrors.push(message) });
+  assert.equal(repeatPreviewErrors.length, 1);
+  const base = { row: { id: "A", title: "A", properties: {}, url: null }, schema: [], draft: {}, packet: saved,
+    onDraft: () => {}, onPreview: () => {}, onApply: async () => {}, onApplied: () => {}, onRolledBack: () => {},
+    onReplayRolledBack: () => {}, isPacketCurrent: (p) => gate.isCurrent(p),
+    applied: { packet: saved, receiptId: receipt.receipt_id } };
+  // Stateless remount represents leaving and returning to the Notion tab.
+  const remounted = renderToStaticMarkup(createElement(NotionEditPanel, base));
+  assert.doesNotMatch(remounted, /Salva su Notion/);
+  assert.match(remounted, /Ripristina modifica/);
+  assert.match(remounted, /r1/);
+  const wrongRow = renderToStaticMarkup(createElement(NotionEditPanel, { ...base, row: { ...base.row, id: "B" } }));
+  assert.doesNotMatch(wrongRow, /Ripristina modifica/);
 });
