@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "npm run test:stream && npm run test:profile-groups && npm run test:receipts && npm run test:host-actions && npm run test:omniroute && npm run test:action-item-operation && npm run test:workspace-input && npm run test:device-image && npm run test:format && npm run test:overview && npm run test:history",
+    "test": "npm run test:stream && npm run test:profile-groups && npm run test:receipts && npm run test:host-actions && npm run test:omniroute && npm run test:action-item-operation && npm run test:workspace-input && npm run test:device-image && npm run test:format && npm run test:overview && npm run test:history && npm run test:obsidian && npm run test:agents-remoting",
     "test:history": "node --experimental-strip-types tests/history-ranges.test.ts",
     "test:device-image": "node --no-warnings --test tests/device-image.test.mjs",
     "test:overview": "node --experimental-strip-types tests/overview-state.test.ts",
@@ -18,11 +18,16 @@
     "test:action-item-operation": "tsc --noEmit --strict --target ES2022 --lib ES2022,DOM,DOM.Iterable --module ESNext --moduleResolution bundler --skipLibCheck --isolatedModules --verbatimModuleSyntax tests/action-item-operation.test.ts",
     "test:workspace-input": "node --test tests/workspace-input.test.mjs",
     "test:profile-groups": "node --experimental-strip-types tests/profile-groups.test.ts",
-    "test:format": "node --experimental-strip-types tests/format.test.ts"
+    "test:format": "node --experimental-strip-types tests/format.test.ts",
+    "test:obsidian": "node --experimental-strip-types --test tests/obsidian-model.test.ts && node --test tests/obsidian-render.test.mjs",
+    "test:agents-remoting": "node --experimental-strip-types --test tests/agents-remoting-contract.test.ts"
   },
   "dependencies": {
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "remark-wiki-link": "2.0.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",
