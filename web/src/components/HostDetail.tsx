@@ -21,20 +21,35 @@ import { HostActions } from "./HostActions";
 import { Meter } from "./Meter";
 import { Sparkline } from "./Sparkline";
 import { HISTORY_RANGES } from "../lib/history-ranges";
+import { overviewHostState, showCurrentMetrics } from "../lib/overview-state";
 
 interface HostDetailProps {
   host: HostView;
+  connectionOffline?: boolean;
   receipts: Receipt[];
   onClose: () => void;
   onReceiptsChanged: () => void;
 }
 
-export function HostDetail({ host, receipts, onClose, onReceiptsChanged }: HostDetailProps) {
+interface LoadedHistory {
+  key: string;
+  points: HistoryPoint[];
+  error: string | null;
+}
+
+/** Data from an older host, range or retry must never appear under the new selection. */
+export function displayedHistory(loaded: LoadedHistory, requestedKey: string) {
+  return loaded.key === requestedKey
+    ? { loading: false, points: loaded.points, error: loaded.error }
+    : { loading: true, points: [] as HistoryPoint[], error: null };
+}
+
+export function HostDetail({ host, connectionOffline, receipts, onClose, onReceiptsChanged }: HostDetailProps) {
   const [minutes, setMinutes] = useState(60);
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [loadedHistory, setLoadedHistory] = useState<LoadedHistory>({ key: "", points: [], error: null });
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const historyKey = `${host.id}:${minutes}:${historyRefresh}`;
+  const { loading: historyLoading, points: history, error: historyError } = displayedHistory(loadedHistory, historyKey);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -46,26 +61,20 @@ export function HostDetail({ host, receipts, onClose, onReceiptsChanged }: HostD
 
   useEffect(() => {
     let alive = true;
-    setHistoryLoading(true);
-    setHistoryError(null);
     void api
       .history(host.id, minutes)
       .then((data) => {
         if (!alive) return;
-        setHistory(data.points);
+        setLoadedHistory({ key: historyKey, points: data.points, error: null });
       })
       .catch(() => {
         if (!alive) return;
-        setHistory([]);
-        setHistoryError("Storico non disponibile per questo intervallo.");
-      })
-      .finally(() => {
-        if (alive) setHistoryLoading(false);
+        setLoadedHistory({ key: historyKey, points: [], error: "Storico non disponibile per questo intervallo." });
       });
     return () => {
       alive = false;
     };
-  }, [host.id, minutes, historyRefresh]);
+  }, [host.id, minutes, historyRefresh, historyKey]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -76,6 +85,11 @@ export function HostDetail({ host, receipts, onClose, onReceiptsChanged }: HostD
   }, [onClose]);
 
   const sample = host.sample;
+  // Unwired callers cannot certify a live stream: the detail remains historical until verified.
+  const connectionUnverified = connectionOffline === undefined;
+  const lastOnly = !showCurrentMetrics(host, connectionOffline !== false);
+  const hostState = overviewHostState(host, connectionOffline !== false);
+  const severity = lastOnly ? "unknown" : host.health.severity;
   const hostReceipts = receipts.filter((receipt) => receipt.host_id === host.id).slice(0, 6);
 
   return (
@@ -124,11 +138,11 @@ export function HostDetail({ host, receipts, onClose, onReceiptsChanged }: HostD
         </header>
 
         <div className="mt-4 flex items-center gap-2 rounded-xl bg-ink-850 px-4 py-3">
-          <span className={`h-2.5 w-2.5 rounded-full ${SEVERITY_BG[host.health.severity]}`} />
-          <span className={`text-sm font-medium ${SEVERITY_TEXT[host.health.severity]}`}>
-            {SEVERITY_LABEL[host.health.severity]}
+          <span className={`h-2.5 w-2.5 rounded-full ${SEVERITY_BG[severity]}`} />
+          <span className={`text-sm font-medium ${SEVERITY_TEXT[severity]}`}>
+            {hostState === "pending" ? "Pending" : connectionUnverified ? "Sconosciuto" : hostState === "stale" ? "Stale" : SEVERITY_LABEL[severity]}
           </span>
-          <span className="text-sm text-ink-400">· {host.health.headline}</span>
+          <span className="text-sm text-ink-400">· {lastOnly ? "stato corrente non verificabile" : host.health.headline}</span>
           {sample && (
             <span
               className="ml-auto text-right text-[11px] text-ink-400"
@@ -138,6 +152,12 @@ export function HostDetail({ host, receipts, onClose, onReceiptsChanged }: HostD
             </span>
           )}
         </div>
+
+        {lastOnly && (
+          <p role="status" className="mt-3 rounded-lg border border-ink-700 px-4 py-3 text-xs text-ink-300">
+            {host.lifecycle === "pending" ? "Runtime pending on boot: nessun campione corrente." : sample ? `${connectionUnverified ? "Connessione stream non verificata. " : ""}Ultimo campione disponibile, non live. Tutti i valori, i processi e la provenienza sottostanti sono storici.` : "Stato sconosciuto: nessun campione corrente disponibile."}
+          </p>
+        )}
 
         {host.health.reason && (
           <p className="mt-3 rounded-lg border border-ink-700 px-4 py-3 text-xs text-ink-300">
@@ -179,10 +199,15 @@ export function HostDetail({ host, receipts, onClose, onReceiptsChanged }: HostD
                   Riprova storico
                 </button>
               </div>
-            ) : historyLoading && history.length === 0 ? (
+            ) : historyLoading ? (
               <p role="status" className="py-5 text-center text-xs text-ink-500">Caricamento storico…</p>
+            ) : history.length === 0 ? (
+              <p role="status" className="py-5 text-center text-xs text-ink-500">Nessun campione storico restituito per questo intervallo.</p>
             ) : (
               <>
+                <p className="text-[10px] leading-5 text-ink-400">
+                  Storico Fleet2/SQLite · {history.length} punti · dal {exactTimestamp(new Date(history[0].t * 1000).toISOString())} al {exactTimestamp(new Date(history[history.length - 1].t * 1000).toISOString())} · valori mancanti non stimati
+                </p>
                 <ChartRow label="CPU" color="text-accent" points={history.map((p) => p.cpu)} />
                 <ChartRow
                   label="Memoria"
@@ -219,14 +244,14 @@ export function HostDetail({ host, receipts, onClose, onReceiptsChanged }: HostD
         </section>
 
         {sample && (
-          <section className="mt-6 grid grid-cols-2 gap-4">
+          <section className="mt-6 grid grid-cols-2 gap-4" aria-label={lastOnly ? "Metriche ultimo campione, non live" : "Metriche correnti"}>
             {host.health.signals.map((signal) => (
               <Meter
                 key={signal.key}
                 label={signal.label}
                 value={signal.value}
                 unit={signal.unit}
-                severity={signal.severity}
+                severity={lastOnly ? "unknown" : signal.severity}
                 detail={signal.detail}
               />
             ))}

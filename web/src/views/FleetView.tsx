@@ -1,5 +1,6 @@
 import { DeviceImage } from "../components/DeviceImage";
 import { Sparkline } from "../components/Sparkline";
+import { overviewFleetStatus, overviewHostState, showCurrentMetrics } from "../lib/overview-state";
 import {
   SEVERITY_BG,
   SEVERITY_LABEL,
@@ -47,8 +48,9 @@ export function FleetView({
   onSelectHost,
   onNavigate,
 }: FleetViewProps) {
+  const fleetStatus = overviewFleetStatus(snapshot, connectionOffline);
   const attention = snapshot.hosts.filter(
-    (host) => host.lifecycle === "managed" && (host.health.severity === "warn" || host.health.severity === "crit"),
+    (host) => showCurrentMetrics(host, connectionOffline) && (host.health.severity === "warn" || host.health.severity === "crit"),
   );
   const unreachable = snapshot.hosts.filter(
     (host) => host.lifecycle === "managed" && (!host.reachable || host.stale),
@@ -79,17 +81,17 @@ export function FleetView({
         </div>
         <div className="flex items-center gap-2 text-xs text-ink-300">
           <span
-            className={`h-2.5 w-2.5 rounded-full ${SEVERITY_BG[snapshot.fleet.worst_severity]}`}
+            className={`h-2.5 w-2.5 rounded-full ${SEVERITY_BG[fleetStatus]}`}
           />
-          <span className={SEVERITY_TEXT[snapshot.fleet.worst_severity]}>
+          <span className={SEVERITY_TEXT[fleetStatus]}>
             {unreachable.length
               ? `${unreachable.length} ${unreachable.length === 1 ? "host non verificabile" : "host non verificabili"}`
               : attention.length
                 ? `${attention.length} ${attention.length === 1 ? "host richiede" : "host richiedono"} attenzione`
-                : snapshot.fleet.worst_severity === "unknown"
-                  ? "Metriche incomplete"
-                  : pending.length
-                    ? `${pending.length} runtime pending on boot`
+                : pending.length
+                  ? `${pending.length} runtime pending on boot`
+                  : fleetStatus === "unknown"
+                    ? "Stato non verificabile"
                     : "Nessun segnale aperto"}
           </span>
         </div>
@@ -109,12 +111,12 @@ export function FleetView({
         />
         <FleetStat
           label="Stato peggiore"
-          value={SEVERITY_LABEL[snapshot.fleet.worst_severity]}
+          value={SEVERITY_LABEL[fleetStatus]}
           detail={
             attention.map((host) => host.name).join(", ") ||
-            (snapshot.fleet.worst_severity === "unknown" ? "almeno una metrica non è misurata" : "nessuna soglia superata")
+            (fleetStatus === "unknown" ? pending.length ? `${pending.length} pending · stato parziale` : "stato parziale" : "nessuna soglia superata")
           }
-          tone={SEVERITY_TEXT[snapshot.fleet.worst_severity]}
+          tone={SEVERITY_TEXT[fleetStatus]}
         />
         <FleetStat
           label="Da fare"
@@ -133,9 +135,9 @@ export function FleetView({
         />
         <FleetStat
           label="Non raggiungibili"
-          value={String(unreachable.length)}
-          detail={unreachable.length ? "connessione o alimentazione da verificare" : "nessun host"}
-          tone={unreachable.length ? "text-signal-warn" : undefined}
+          value={connectionOffline ? "—" : String(unreachable.length)}
+          detail={connectionOffline ? "stream offline" : unreachable.length ? "host da verificare" : "nessun host"}
+          tone={!connectionOffline && unreachable.length ? "text-signal-warn" : undefined}
         />
       </dl>
 
@@ -299,13 +301,14 @@ function HostRow({
   onSelect: (hostId: string) => void;
 }) {
   const pending = host.lifecycle === "pending";
-  const offline = connectionOffline || pending || !host.reachable || host.stale;
-  const cpu = signalFor(host, "cpu");
-  const memory = signalFor(host, "memory");
-  const disk = signalFor(host, "disk");
-  const gpu = signalFor(host, "gpu");
-  const thermal = signalFor(host, "thermal") ?? signalFor(host, "thermal-pressure");
-  const primaryDisk = host.sample?.disk?.[0] ?? null;
+  const offline = !showCurrentMetrics(host, connectionOffline);
+  const hostState = overviewHostState(host, connectionOffline);
+  const cpu = offline ? undefined : signalFor(host, "cpu");
+  const memory = offline ? undefined : signalFor(host, "memory");
+  const disk = offline ? undefined : signalFor(host, "disk");
+  const gpu = offline ? undefined : signalFor(host, "gpu");
+  const thermal = offline ? undefined : signalFor(host, "thermal") ?? signalFor(host, "thermal-pressure");
+  const primaryDisk = offline ? null : host.sample?.disk?.[0] ?? null;
 
   return (
     <button
@@ -323,7 +326,7 @@ function HostRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${SEVERITY_BG[connectionOffline ? "unknown" : host.health.severity]}`}
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${SEVERITY_BG[offline ? "unknown" : host.health.severity]}`}
             />
             <h3 className="truncate text-sm font-semibold text-ink-100">{host.name}</h3>
             {host.is_control_plane && (
@@ -357,7 +360,7 @@ function HostRow({
             </p>
           ) : offline && (
             <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-signal-warn">
-              {hostConnectivityMessage(host.error)}
+              {hostState === "stale" ? "Stale · ultimo campione conservato, non live." : hostConnectivityMessage(host.error)}
             </p>
           )}
         </div>
@@ -389,7 +392,7 @@ function HostRow({
       <div>
         <MetricLabel label="Termica / GPU" />
         <p className={`tnum mt-1 truncate text-sm font-semibold ${SEVERITY_TEXT[thermal?.severity ?? "unknown"]}`}>
-          {host.sample
+          {!offline && host.sample
             ? thermalLabel(
                 host.sample.thermal.cpu_c,
                 host.sample.thermal.pressure_level,
@@ -397,8 +400,8 @@ function HostRow({
               )
             : "—"}
         </p>
-        <p className={`mt-0.5 truncate text-[10px] ${gpu ? SEVERITY_TEXT[gpu.severity] : "text-ink-500"}`} title={host.sample?.gpu?.name ?? undefined}>
-          {gpu?.value !== undefined && gpu?.value !== null
+        <p className={`mt-0.5 truncate text-[10px] ${gpu ? SEVERITY_TEXT[gpu.severity] : "text-ink-500"}`} title={offline ? undefined : host.sample?.gpu?.name ?? undefined}>
+          {offline ? "—" : gpu?.value !== undefined && gpu?.value !== null
             ? `GPU ${metric(gpu.value, "%")}`
             : host.sample?.gpu?.name ?? "GPU non esposta"}
         </p>
