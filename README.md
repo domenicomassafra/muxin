@@ -1,31 +1,14 @@
-<p align="center">
-  <img src="assets/brand/icon-512.png" width="128" height="128" alt="Muxin">
-</p>
+# Plancia
 
-<h1 align="center">Muxin</h1>
+Plancia è la console web owner per Panoramica, Flotta, Agenti, Account, Workspace e Audit, con una sola navigazione responsive in bianco, nero e grigi. La UI canonica è in [`web/`](web/README.md); ControlCenter mantiene backend, autenticazione, policy, dati e writer e serve l'artefatto Plancia verificato nella stessa origine.
 
-<p align="center">One app for all your machines, run by you <b>or by your AI agents</b>.<br>
-<a href="https://muxin.dev">muxin.dev</a> · free and open source (Apache-2.0)</p>
+Per il prodotto e i limiti delle capacità leggere [PRODUCT.md](PRODUCT.md); per pubblicazione immutabile, attestazione degli asset e rollback leggere [DESIGN.md](DESIGN.md). Le prove del consumer e le release sono nella [#20](https://github.com/domenicomassafra/plancia/issues/20). I collaudi fisici iPhone e Windows sono nella [#25](https://github.com/domenicomassafra/plancia/issues/25).
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/overview-dark.webp">
-  <img src="assets/readme/overview-light.webp" alt="Muxin's overview: each machine, what's running on it, its CPU, memory and disk, and what needs a look.">
-</picture>
+Sviluppo, build e test avvengono sul Mac Studio con il launcher di ammissione indicato in [AGENTS.md](AGENTS.md). Il MiniPC esegue il runtime installato. Il frontend usa esclusivamente API della stessa origine e non contiene credenziali o copie dei database/vault.
 
-Point it at the machines you own (a Mac Studio under the desk, a NUC, a Linux box, a few MacBooks, a Windows laptop) and Muxin becomes the hub for all of them:
+## Documentazione donor Muxin
 
-- **Agent sessions:** Claude Code, Codex, OpenCode, Gemini CLI, Amp, Pi or a shell on any machine, in a real terminal, still running after you close the app.
-- **Desktops:** see a Linux machine's screen live and use it, beside an agent's terminal or in its own window.
-- **Files and clipboard:** copy files and folders between any two machines, and copy on your Mac to paste on a machine (and back).
-- **GitHub:** your inbox, repositories, issues and pull requests, with one click to hand an issue to an agent on the machine you pick.
-- **Self-hosted runners:** which runners are working, idle or offline, which jobs no runner can take, and installing, starting, stopping or removing runners.
-- **Health:** CPU, memory, disk and uptime, and a plain answer when a machine is offline or unreachable.
-
-Agents can also **borrow a machine as a work environment**: an [agent workspace](#agent-workspaces) is a persistent folder (optionally a git checkout) on one of your machines where an agent runs commands, edits files and syncs code.
-
-- **Native and fast.** The window is built with [GPUI](https://www.gpui.rs), the GPU-accelerated UI framework behind the Zed editor. It runs on macOS, Linux and Windows.
-- **Agent-first.** Every capability is available as an MCP server (`muxin mcp`) and as scriptable commands with `--json`. Claude Code, Codex and other agents can check your machines, explain problems and fix them.
-- **Uses what you already have.** Machines are first reached with your system `ssh`, so your keys, agent and `~/.ssh/config` aliases just work; after that Muxin talks to its own small agent there, directly or through [Tailscale](#tailscale-and-moving-between-networks). GitHub access uses your `gh` login.
+Il codice Rust preesistente (`src/`, `agent/`, `share-server/`) è il donor separato [LumaryLabsLLC/muxin](https://github.com/LumaryLabsLLC/muxin), Apache-2.0. La documentazione upstream seguente riguarda **Muxin**, comprese installazione, CLI e capacità native; non costituisce il contratto delle capacità Plancia. Provenance e attribuzioni rimangono in [web/PROVENANCE.md](web/PROVENANCE.md), [LICENSE](LICENSE), [NOTICE](NOTICE) e [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Install
 
