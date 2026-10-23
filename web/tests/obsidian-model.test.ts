@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { inAllowedRoots, noteTree, resolveNoteTarget, splitFrontmatter, verifiedObsidianOpenUri } from "../src/views/obsidian/model.ts";
+import { inAllowedRoots, noteTree, resolveNoteTarget, splitFrontmatter, silverBulletNoteUrl } from "../src/views/obsidian/model.ts";
 
 const notes = [
   { path: "05-knowledge/Guides/Start.md", title: "Start", size: 42, modified: 1 },
@@ -40,21 +40,12 @@ test("wikilinks resolve known files, reject ambiguity and paths outside the inde
   assert.equal(inAllowedRoots("05-knowledge/.obsidian/private.md", roots), false);
 });
 
-test("desktop deep link validates scheme, file, one vault and only expected parameters", () => {
+test("SilverBullet read-only route requires explicit root intersection and safe segments", () => {
   const path = "05-knowledge/Guides/Start.md";
-  const roots = ["05-knowledge"];
-  const good = "obsidian://open?vault=Canonical&file=05-knowledge/Guides/Start.md";
-  assert.equal(verifiedObsidianOpenUri(good, path, roots), good);
-  const hostile = [
-    "javascript:alert(1)",
-    "obsidian://open?vault=Canonical&file=03-projects/Other.md",
-    "obsidian://open?vault=Canonical&file=05-knowledge/Guides/Start.md&file=03-projects/Other.md",
-    "obsidian://open?vault=Canonical&file=05-knowledge/Guides/Start.md&extra=value",
-    "obsidian://open?vault=Canonical&file=05-knowledge/Guides/Start.md#fragment",
-    "obsidian://open?vault=&file=05-knowledge/Guides/Start.md",
-    "obsidian://open?vault=Canonical&file=05-knowledge/Guides/Start.md&vault=Other",
-    "obsidian://open?vault=Canonical&file=05-knowledge/Guides/Start.md&intent=edit",
-  ];
-  for (const uri of hostile) assert.equal(verifiedObsidianOpenUri(uri, path, roots), null, uri);
-  assert.equal(verifiedObsidianOpenUri(good, "00-system/secret.md", roots), null);
+  assert.equal(silverBulletNoteUrl(path, ["05-knowledge"]), "/notes/Guides/Start");
+  assert.equal(silverBulletNoteUrl(path, ["03-projects"]), null);
+  assert.equal(silverBulletNoteUrl("05-knowledge/.obsidian/Secret.md", ["05-knowledge"]), null);
+  assert.equal(silverBulletNoteUrl("05-knowledge/../00-system/Secret.md", ["05-knowledge"]), null);
+  assert.equal(silverBulletNoteUrl("03-projects/Start.md", ["05-knowledge"]), null);
+  assert.equal(silverBulletNoteUrl("05-knowledge/Con un nome.md", ["05-knowledge"]), "/notes/Con%20un%20nome");
 });
