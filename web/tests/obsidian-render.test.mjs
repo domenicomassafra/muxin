@@ -66,7 +66,7 @@ test("Obsidian tree navigates full bounded nodes even when results only include 
   assert.match(html, /Seleziona una nota/);
 });
 
-test("Obsidian desktop links must match the authorized selected path, not a forged URI", () => {
+test("Obsidian desktop deep links fail closed until canonical vault identity is attested", () => {
   const snapshot = {
     obsidian: {
       source: { available: true, reason: null },
@@ -87,7 +87,11 @@ test("Obsidian desktop links must match the authorized selected path, not a forg
   }));
   assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
   snapshot.obsidian.selected.open_uri = "obsidian://open?vault=Test&file=05-knowledge%2FDaily.md";
-  assert.match(render(), /href="obsidian:\/\/open\?/);
+  assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
+  snapshot.obsidian.source.vault = "Test";
+  assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
+  snapshot.obsidian.selected.open_uri = "obsidian://open?vault=Unrelated&file=05-knowledge%2FDaily.md";
+  assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
   snapshot.obsidian.selected.open_uri += "&file=00-system%2FSecret.md";
   assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
   snapshot.obsidian.selected.open_uri = "obsidian://open?vault=Test&file=05-knowledge%2FDaily.md&intent=edit";
@@ -97,6 +101,22 @@ test("Obsidian desktop links must match the authorized selected path, not a forg
   snapshot.obsidian.selected.path = "00-system/Secret.md";
   snapshot.obsidian.selected.open_uri = "obsidian://open?vault=Test&file=00-system%2FSecret.md";
   assert.doesNotMatch(render(), /href="obsidian:\/\/open\?/);
+});
+
+test("SilverBullet link requires source allowlist in addition to local 05-knowledge policy", () => {
+  const snapshot = { obsidian: {
+    source: { available: true, reason: null, vault: "Untrusted" },
+    allowlisted_roots: ["03-projects"], nodes: indexed, results: indexed,
+    selected: { ...indexed[1], content: "# Test", content_truncated: false, links: [], backlinks: [], open_uri: "obsidian://open?vault=Untrusted&file=05-knowledge%2FDaily.md" },
+  } };
+  const render = () => renderToStaticMarkup(React.createElement(ObsidianWorkspace, {
+    snapshot, search: "", root: "all", onSearch: () => {}, onRoot: () => {}, onSelect: () => {},
+  }));
+  assert.doesNotMatch(render(), /href="\/notes\//);
+  snapshot.obsidian.allowlisted_roots = ["03-projects", "05-knowledge"];
+  assert.match(render(), /href="\/notes\/Daily"/);
+  snapshot.obsidian.selected.path = "05-knowledge/.obsidian/Secret.md";
+  assert.doesNotMatch(render(), /href="\/notes\//);
 });
 
 test("Markdown never makes unsupported protocols or external embeds clickable/loadable", () => {
