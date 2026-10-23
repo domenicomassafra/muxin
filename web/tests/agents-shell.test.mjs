@@ -33,8 +33,12 @@ test("Agenti integra Hermes e i due selettori interni senza navigazione globale 
   assert.match(html, /aria-pressed="true"[^>]*>Sessioni<\/button>/);
   assert.match(html, /aria-pressed="false"[^>]*>Desktop<\/button>/);
   assert.match(html, /role="region" aria-label="Sessioni Agenti"/);
+  assert.match(html, /<section aria-label="Sessioni Hermes">/);
+  assert.match(html, /<section hidden="" aria-label="Desktop autorizzati">/);
   assert.match(html, /Profili Signori e sessioni/);
   assert.match(html, /Verifica dell&#x27;adapter Hermes in corso/);
+  assert.doesNotMatch(html, /Desktop remoto · Apache Guacamole/,
+    "unvisited Desktop must not mount its adapter");
   assert.match(html, /href="\/agents"/, "Orca legacy remains a distinct same-origin link");
 });
 
