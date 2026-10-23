@@ -1,11 +1,17 @@
 {
-  "name": "Plancia · Workspace",
+  "name": "Plancia",
   "short_name": "Plancia",
-  "description": "Workspace owner in sola lettura: Obsidian e Notion Actions",
-  "start_url": "/workspace",
+  "description": "Console owner per flotta, agenti, account, workspace e audit",
+  "id": "/",
+  "lang": "it",
+  "start_url": "/#overview",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#080a0e",
-  "theme_color": "#080a0e",
-  "icons": [{ "src": "/plancia-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    { "src": "/assets/plancia-icon-192-6e349dd3.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/plancia-icon-512-1bd9ec58.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/plancia-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
 }
