@@ -12,10 +12,11 @@ function deferred<T>() {
 
 function status(result: OmniRouteStatus["observation"]["result"]): OmniRouteStatus {
   return {
-    policy: { available: true, source: "omniroute/fleet-default-models.json" },
+    policy: { available: true, source: "omniroute/fleet-default-models.json", sha256: "a".repeat(64) },
     observation: {
       source: "controlcenter fleet check", result, exit_code: result === "clean" ? 0 : 2,
-      checked_at: "2026-10-23T08:50:00Z", scope_complete: true, policy_revision: "rev-1", items: [],
+      checked_at: "2026-10-23T08:50:00Z", scope_complete: true, policy_revision: "rev-1",
+      items: [{ host: "minipc", component: "omniroute-core", result }],
     },
   };
 }
@@ -73,7 +74,11 @@ test("late responses after hiding or overlapping refreshes cannot overwrite curr
 test("clean requires completed scope, exit 0 and valid observation timestamp", () => {
   assert.equal(isOmniRouteConverged(status("clean")), true);
   assert.equal(isOmniRouteConverged(status("changes")), false);
+  assert.equal(isOmniRouteConverged({ ...status("clean"), policy: { ...status("clean").policy, available: false } }), false);
+  assert.equal(isOmniRouteConverged({ ...status("clean"), policy: { ...status("clean").policy, sha256: undefined } }), false);
+  assert.equal(isOmniRouteConverged({ ...status("clean"), policy: { ...status("clean").policy, sha256: "invalid" } }), false);
   assert.equal(isOmniRouteConverged({ ...status("clean"), observation: { ...status("clean").observation, scope_complete: false } }), false);
   assert.equal(isOmniRouteConverged({ ...status("clean"), observation: { ...status("clean").observation, exit_code: 2 } }), false);
   assert.equal(isOmniRouteConverged({ ...status("clean"), observation: { ...status("clean").observation, checked_at: null } }), false);
+  assert.equal(isOmniRouteConverged({ ...status("clean"), observation: { ...status("clean").observation, items: [] } }), false);
 });
