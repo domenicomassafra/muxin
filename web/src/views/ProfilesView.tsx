@@ -612,7 +612,7 @@ export function ProfilesView({
             type="button"
             onClick={() => void beginNameSync()}
             disabled={busyKey !== null || loading}
-            className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-[#729cff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-colors hover:bg-ink-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busyKey === "name-sync-preview" ? "Verifica nomi…" : "Aggiorna nomi su tutti i computer"}
           </button>
@@ -938,7 +938,7 @@ export function ProfilesView({
                       {nameWithoutCategory(groupDisplayName(group))}
                     </p>
                     {isGmail(row.email) && (
-                      <span className="shrink-0 rounded border border-[#ea4335]/25 bg-[#ea4335]/8 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[#f28b82] uppercase">
+                      <span className="shrink-0 rounded border border-ink-600 bg-ink-800 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-ink-200 uppercase">
                         Gmail
                       </span>
                     )}
@@ -952,7 +952,7 @@ export function ProfilesView({
                     {group.email || row.directory}
                   </p>
                   {row.email && row.name_policy_ok === false && (
-                    <p className="mt-0.5 truncate text-[10px] text-amber-300">
+                    <p className="mt-0.5 truncate text-[10px] text-ink-300">
                       Nome da riallineare alla policy
                     </p>
                   )}
@@ -1023,7 +1023,7 @@ export function ProfilesView({
                     aria-label={`Apri ${displayName(row)} su ${row.hostLabel}`}
                     onClick={() => void openProfile(row)}
                     disabled={busyKey === key}
-                    className="min-h-11 rounded-lg bg-accent px-3 text-xs font-semibold text-white transition-colors hover:bg-[#729cff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-h-11 rounded-lg bg-ink-100 px-3 text-xs font-semibold text-ink-950 transition-colors hover:bg-ink-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {busyKey === key ? "Apro…" : "Apri"}
                   </button>
@@ -1266,7 +1266,7 @@ function ProfileEditDialog({
             type="button"
             disabled={busy}
             onClick={onSave}
-            className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-[#729cff] disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 hover:bg-ink-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "Aggiornamento…" : "Applica nome"}
           </button>
@@ -1360,7 +1360,7 @@ function ProfileNameSyncDialog({
             type="button"
             onClick={onApply}
             disabled={busy}
-            className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-[#729cff] disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 hover:bg-ink-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "Aggiornamento…" : "Aggiorna tutto"}
           </button>
