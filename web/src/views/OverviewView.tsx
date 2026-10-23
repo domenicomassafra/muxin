@@ -189,7 +189,7 @@ export function OverviewView({
                     <MiniMetric label="CPU" value={currentMetrics ? formatPercent(cpuValue(host)) : "—"} />
                     <MiniMetric label="Memoria" value={currentMetrics ? formatPercent(memoryPressure(host)) : "—"} />
                     <MiniMetric
-                      label={primaryDisk(host)?.available_bytes != null
+                      label={currentMetrics && primaryDisk(host)?.available_bytes != null
                         ? (primaryDisk(host)?.available_stale ? "Disponibile (cache)" : "Disponibile")
                         : "Libero"}
                       value={currentMetrics ? formatFree(primaryDisk(host)?.available_bytes ?? primaryDisk(host)?.free_bytes) : "—"}
@@ -242,15 +242,19 @@ export function OverviewView({
             <div className="px-4 py-6 text-sm text-ink-400">Nessun segnale operativo aperto.</div>
           ) : (
             <div className="divide-y divide-ink-800">
-              {hostAlerts.map((host) => (
-                <button type="button" key={host.id} onClick={() => onHost(host.id)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-ink-850">
-                  <span className={`mt-1.5 h-2 w-2 rounded-full ${SEVERITY_BG[host.health.severity]}`} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm text-ink-200">{host.name}</span>
-                    <span className={`mt-0.5 block text-xs ${SEVERITY_TEXT[host.health.severity]}`}>{host.error ?? host.health.headline}</span>
-                  </span>
-                </button>
-              ))}
+              {hostAlerts.map((host) => {
+                const state = overviewHostState(host, connectionOffline);
+                const status = state === "stale" || state === "pending" ? "unknown" : state;
+                return (
+                  <button type="button" key={host.id} onClick={() => onHost(host.id)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-ink-850">
+                    <span className={`mt-1.5 h-2 w-2 rounded-full ${SEVERITY_BG[status]}`} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm text-ink-200">{host.name}</span>
+                      <span className={`mt-0.5 block text-xs ${SEVERITY_TEXT[status]}`}>{state === "stale" ? "Stale · ultimo campione, non live" : state === "unknown" ? host.error ?? "Nessuna misura corrente affidabile" : host.health.headline}</span>
+                    </span>
+                  </button>
+                );
+              })}
               {profileOffline.map((inventory) => (
                 <button type="button" key={`profile:${inventory.host.id}`} onClick={() => onNavigate("profiles")} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-ink-850">
                   <span className="mt-1.5 h-2 w-2 rounded-full bg-signal-warn" />
