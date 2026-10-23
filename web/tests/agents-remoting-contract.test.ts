@@ -2,13 +2,73 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   AdapterError,
+  attachHermesSession,
   getHermesMessages,
   getHermesProfiles,
   getHermesSessions,
   getRemoteDesktops,
+  sendHermesPrompt,
+  type HermesProfile,
 } from "../src/lib/agents-remoting.ts";
 
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+
+const writableProfile: HermesProfile = {
+  id: "signor-coding", name: "Coding", host: "minipc", gateway: "running", version: null,
+  capabilities: { readable: true, attachable: true, sendable: true },
+};
+const existingSession = { id: "existing_1", title: null, updated_at: null };
+
+test("native attach binds existing profile, session and original gateway, without starting a process", async () => {
+  const calls: { path: string; init: RequestInit }[] = [];
+  const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+    calls.push({ path, init });
+    return { source: "hermes-native", profile_id: "signor-coding", session_id: "existing_1",
+      instance_id: "native-instance-001", authority_epoch: 12 } as T;
+  };
+  const lease = await attachHermesSession(writableProfile, existingSession, request);
+  assert.deepEqual(lease, { profileId: "signor-coding", sessionId: "existing_1",
+    instanceId: "native-instance-001", authorityEpoch: 12 });
+  assert.deepEqual(calls, [{ path: "/api/v1/hermes/profiles/signor-coding/sessions/existing_1/attach",
+    init: { method: "POST" } }]);
+  await assert.rejects(attachHermesSession({ ...writableProfile,
+    capabilities: { ...writableProfile.capabilities, attachable: false } }, existingSession, request),
+  (error: unknown) => error instanceof AdapterError && error.kind === "permission_denied");
+  assert.equal(calls.length, 1, "server denied grants never cause a browser attach");
+  await assert.rejects(attachHermesSession(writableProfile, existingSession, async <T>() => ({
+    source: "hermes-native", profile_id: "signor-other", session_id: "existing_1",
+    instance_id: "native-instance-001", authority_epoch: 12,
+  } as T)), (error: unknown) => error instanceof AdapterError && error.kind === "invalid_contract");
+});
+
+test("native send keeps the caller nonce and requires the matching gateway admission", async () => {
+  const lease = { profileId: "signor-coding", sessionId: "existing_1",
+    instanceId: "native-instance-001", authorityEpoch: 12 };
+  const calls: { path: string; body: unknown; method: string | undefined }[] = [];
+  const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+    calls.push({ path, body: JSON.parse(String(init.body)), method: init.method });
+    return { source: "hermes-native", profile_id: "signor-coding", session_id: "existing_1",
+      instance_id: "native-instance-001", authority_epoch: 12, admission_id: "admit_123",
+      status: "queued" } as T;
+  };
+  const first = await sendHermesPrompt(lease, writableProfile.capabilities, "nonce_12345678", "test", request);
+  const replay = await sendHermesPrompt(lease, writableProfile.capabilities, "nonce_12345678", "test", request);
+  assert.deepEqual(first, replay);
+  assert.deepEqual(calls[0], { path: "/api/v1/hermes/profiles/signor-coding/sessions/existing_1/send",
+    method: "POST", body: { instance_id: "native-instance-001", authority_epoch: 12,
+      nonce: "nonce_12345678", text: "test" } });
+  assert.deepEqual(calls[0], calls[1], "an uncertain send must retain the same nonce");
+  await assert.rejects(sendHermesPrompt(lease, { ...writableProfile.capabilities, sendable: false },
+    "nonce_12345678", "test", request),
+  (error: unknown) => error instanceof AdapterError && error.kind === "permission_denied");
+  await assert.rejects(sendHermesPrompt(lease, writableProfile.capabilities, "short", "test", request),
+    (error: unknown) => error instanceof AdapterError && error.kind === "invalid_identifier");
+  assert.equal(calls.length, 2);
+  await assert.rejects(sendHermesPrompt(lease, writableProfile.capabilities, "nonce_12345678", "test",
+    async <T>() => ({ source: "hermes-native", profile_id: "signor-coding", session_id: "existing_1",
+      instance_id: "unexpected-gateway", authority_epoch: 12, admission_id: "admit_123", status: "queued" } as T)),
+  (error: unknown) => error instanceof AdapterError && error.kind === "invalid_contract");
+});
 
 test("Hermes inventory uses same-origin cookies and refuses non-native sources", async () => {
   const calls: { url: string; init: RequestInit }[] = [];
