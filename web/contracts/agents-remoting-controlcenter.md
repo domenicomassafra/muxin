@@ -1,4 +1,4 @@
-# Contratti Plancia #16/#17 → ControlCenter (delta esterno NON applicato)
+# Contratti Plancia #16/#17 → ControlCenter
 
 Questo documento è una proposta revisionabile di interfaccia per il backend **privato**
 `domenicomassafra/controlcenter/dashboard/`. Le viste Plancia consumano soltanto API
@@ -58,15 +58,17 @@ versione reale della CLI e output tipizzato prima della promozione.
 
 ## #17 — inventory Guacamole e capability verificate
 
-Il WIP Studio **esterno e non distribuito** ControlCenter `c23a633b` contiene
-`dashboard/backend/{desktops.py,desktop_guacd.py}` e la UI Guacamole 1.6.0;
-va preservato, confrontato col WIP MiniPC dirty e reviewato dal suo proprietario.
-La route WIP `GET /api/v1/desktops` ritorna soltanto
+L'implementazione originaria Studio `c23a633b` (non distribuita) contiene
+`dashboard/backend/{desktops.py,desktop_guacd.py}`. Il nuovo adapter backend
+ControlCenter aggiunge grant espliciti, probe guacd e tunnel governato;
+la release MiniPC resta da verificare nella checklist controlcenter#484.
+La vecchia route WIP `GET /api/v1/desktops` ritornava soltanto
 `{ "donor":"apache-guacamole-1.6.0", "desktops":[{"id":"test","name":"Esempio","protocol":"vnc"}] }`.
 Senza stato salute/capability il client Plancia classifica ogni target
 `unconfigured` e tutti i permessi `false`.
 
-**Delta minimo sul backend ControlCenter**, prima di abilitare interazione:
+**Contratto implementato dal backend ControlCenter**, con interazione ammessa
+soltanto dopo la verifica di sessione, policy e disponibilità del proxy:
 
 ```json
 {
