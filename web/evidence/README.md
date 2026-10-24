@@ -13,9 +13,9 @@ Il prototipo React che le immagini illustrano vive nella
 [PR #49](https://github.com/domenicomassafra/plancia/pull/49).
 
 Il flusso funzionale è verificabile separatamente dai test e dagli adapter
-same-origin. La cattura del bundle React autentico potrà essere allegata
-quando il Mac Studio completerà il build ammesso dalla guardia risorse
-e quando l'owner sceglierà il design.
+same-origin. La cattura del bundle React autentico su consumer richiede
+una release esplicita coordinata dalla #20; gli screenshot attuali rimangono
+anteprime sintetiche per la decisione grafica dell'owner nella #25.
 
 ## Readback live sul MiniPC, 23 ottobre 2026
 

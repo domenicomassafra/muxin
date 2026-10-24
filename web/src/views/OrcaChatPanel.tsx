@@ -139,7 +139,7 @@ export function OrcaChatPanel({ active }: { active: boolean }) {
             <h3 className="font-semibold text-ink-100">{selectedTerminal?.title || selectedHit?.title || "Conversazioni Orca"}</h3>
             <p className="mt-1 text-xs text-ink-400">{selectedTerminal ? "Terminale nativo · aggiornamento ogni 2,5 s" : selectedHit ? `Sessione ${selectedHit.sessionId} · estratto indicizzato` : "Seleziona un terminale o cerca una sessione Pi"}</p>
           </div>
-          {selectedTerminal && <span className="rounded-full border border-ink-600 px-2 py-1 text-xs text-ink-300">Live</span>}
+          {selectedTerminal && <span className="rounded-full border border-ink-600 px-2 py-1 text-xs text-ink-300">{selectedTerminal.connected ? "Live" : "Disconnesso"}</span>}
         </header>
         <div className="min-h-72 flex-1 overflow-auto p-5" aria-live="polite" aria-atomic="false">
           {selectedTerminal && screen.state === "loading" && <p className="text-sm text-ink-400">Collegamento al terminale…</p>}
