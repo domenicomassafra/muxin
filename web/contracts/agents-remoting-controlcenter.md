@@ -109,6 +109,24 @@ Guacamole su desktop Xvfb/VNC isolato. Poi prove fisiche autorizzate Mac/Linux,
 con Windows separato #25. Lo stato `ready` **non certifica** screenshot/input
 reali finché i test con nonce e readback non siano documentati nel ticket.
 
+### Bridge clipboard X11 per VNC
+
+Con Xvfb privo di clipboard manager, `x11vnc` può ricevere correttamente il
+`ClientCutText` VNC ma lasciare il testo soltanto in `CUT_BUFFER0`: la selezione
+X11 `CLIPBOARD` rimane senza proprietario. Il rimedio senza patch del donor è
+`autocutsel -selection CLIPBOARD`, attivo **sullo stesso display X11** di
+`x11vnc`. I due versi sono verificabili con la regressione
+`web/tests/clipboard-cut-buffer-smoke.sh` impostando `DISPLAY` a una fixture
+Xvfb privata. La prova completa richiede inoltre nonce browser→viewer→Guacd→
+VNC→X11 e ritorno, framebuffer, input ripetuto e target negato senza pixel.
+
+Provenance: `autocutsel` 0.10.1 (Ubuntu 26.04 `0.10.1-1build3`, sorgente
+https://www.nongnu.org/autocutsel/, GPL-2.0-or-later) e `x11vnc` 0.9.17
+(Ubuntu `0.9.17-2`, https://github.com/LibVNC/x11vnc,
+GPL-2.0-or-later). Sono eseguibili di sistema indipendenti, senza copia o
+collegamento dei sorgenti GPL nel bundle Plancia. Non avviare il bridge su un
+desktop condiviso senza autorizzazione; la fixture `:199` è separata.
+
 ## Separazione dei file / consegna
 
 Plancia: `web/src/lib/agents-remoting.ts`, `web/src/views/{AgentsSignoriView,RemoteDesktopView}.tsx`
