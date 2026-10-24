@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { AgentsSignoriView } from "./AgentsSignoriView";
 import { RemoteDesktopView } from "./RemoteDesktopView";
+import { OrcaChatPanel } from "./OrcaChatPanel";
 
-type AgentsSubView = "sessions" | "desktop";
+type AgentsSubView = "sessions" | "orca" | "desktop";
 
-/** Two authorized surfaces under the existing sixth navigation destination. */
+/** Authorized native agent surfaces under Plancia's existing navigation. */
 export function AgentsSection() {
   const [subView, setSubView] = useState<AgentsSubView>("sessions");
   const [visited, setVisited] = useState<Set<AgentsSubView>>(() => new Set(["sessions"]));
@@ -17,13 +18,14 @@ export function AgentsSection() {
       <div>
         <h1 className="text-2xl font-semibold text-ink-100">Agenti</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-300">
-          Sessioni e desktop vengono mostrati solo con le capacità confermate dal backend owner.
-          L'accesso alle sessioni originali e ai desktop dipende dai rispettivi adapter.
+          Conversazioni native e cronologia nello stesso spazio, secondo i permessi verificati
+          dal backend owner. Le sessioni restano nei rispettivi runtime.
         </p>
       </div>
       <div role="group" aria-label="Sezioni Agenti" className="flex flex-wrap gap-2">
         {([
-          { id: "sessions", label: "Sessioni" },
+          { id: "sessions", label: "Signori Hermes" },
+          { id: "orca", label: "Pi · Orca" },
           { id: "desktop", label: "Desktop" },
         ] as const).map((item) => (
           <button key={item.id} type="button" aria-pressed={subView === item.id}
@@ -33,9 +35,12 @@ export function AgentsSection() {
           </button>
         ))}
       </div>
-      <div id="agents-content" role="region" aria-label={subView === "sessions" ? "Sessioni Agenti" : "Desktop Agenti"}>
+      <div id="agents-content" role="region" aria-label={subView === "sessions" ? "Chat Hermes" : subView === "orca" ? "Chat Orca" : "Desktop Agenti"}>
         <section hidden={subView !== "sessions"} aria-label="Sessioni Hermes">
           {visited.has("sessions") && <AgentsSignoriView />}
+        </section>
+        <section hidden={subView !== "orca"} aria-label="Cronologia Pi e Orca">
+          {visited.has("orca") && <OrcaChatPanel active={subView === "orca"} />}
         </section>
         <section hidden={subView !== "desktop"} aria-label="Desktop autorizzati">
           {visited.has("desktop") && <RemoteDesktopView active={subView === "desktop"} />}

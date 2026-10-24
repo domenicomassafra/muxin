@@ -7,6 +7,7 @@ import { build } from "esbuild";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
+import "./orca-chat-contract.test.ts";
 
 // Bundle the real shell and domain components without a browser session or backend.
 const directory = mkdtempSync(join(process.cwd(), "node_modules/.agents-shell-test-"));
@@ -26,20 +27,22 @@ const { default: App } = await import(pathToFileURL(join(directory, "App.js")).h
 const { AgentsSection } = await import(pathToFileURL(join(directory, "views/AgentsSection.js")).href);
 const { RemoteDesktopView } = await import(pathToFileURL(join(directory, "views/RemoteDesktopView.js")).href);
 
-test("Agenti integra Hermes e i due selettori interni senza navigazione globale duplicata", () => {
+test("Agenti integra chat Hermes/Orca e Desktop senza navigazione globale duplicata", () => {
   const html = renderToStaticMarkup(createElement(AgentsSection));
   assert.doesNotMatch(html, /<nav\b/);
   assert.match(html, /aria-label="Sezioni Agenti"/);
-  assert.match(html, /aria-pressed="true"[^>]*>Sessioni<\/button>/);
+  assert.match(html, /aria-pressed="true"[^>]*>Signori Hermes<\/button>/);
+  assert.match(html, /aria-pressed="false"[^>]*>Pi · Orca<\/button>/);
   assert.match(html, /aria-pressed="false"[^>]*>Desktop<\/button>/);
-  assert.match(html, /role="region" aria-label="Sessioni Agenti"/);
+  assert.match(html, /role="region" aria-label="Chat Hermes"/);
   assert.match(html, /<section aria-label="Sessioni Hermes">/);
+  assert.match(html, /<section hidden="" aria-label="Cronologia Pi e Orca">/);
   assert.match(html, /<section hidden="" aria-label="Desktop autorizzati">/);
-  assert.match(html, /Profili Signori e sessioni/);
+  assert.match(html, /Conversazioni dei Signori/);
   assert.match(html, /Verifica dell&#x27;adapter Hermes in corso/);
   assert.doesNotMatch(html, /Desktop remoto · Apache Guacamole/,
     "unvisited Desktop must not mount its adapter");
-  assert.match(html, /href="\/agents"/, "Orca legacy remains a distinct same-origin link");
+  assert.doesNotMatch(html, /href="\/agents"/, "Orca history stays embedded in Plancia");
 });
 
 test("il caricamento Desktop resta prudente senza aprire una connessione", () => {
@@ -48,7 +51,7 @@ test("il caricamento Desktop resta prudente senza aprire una connessione", () =>
   assert.doesNotMatch(desktop, /<iframe|<video|<canvas/i);
 });
 
-test("App rende le due sottosezioni nella sesta voce, senza settima navigazione", () => {
+test("App rende le chat nella voce Agenti, senza settima navigazione", () => {
   globalThis.window = { location: { hash: "#agents" } };
   const html = renderToStaticMarkup(createElement(App));
   const navs = [...html.matchAll(/<nav\b[^>]*aria-label="Navigazione principale"[^>]*>(.*?)<\/nav>/gs)];
@@ -58,7 +61,8 @@ test("App rende le due sottosezioni nella sesta voce, senza settima navigazione"
     assert.doesNotMatch(content, /Desktop/);
   }
   assert.match(html, /aria-label="Sezioni Agenti"/);
-  assert.match(html, /Profili Signori e sessioni/);
+  assert.match(html, /Conversazioni dei Signori/);
+  assert.match(html, /Pi · Orca/);
   assert.match(html, /aria-pressed="false"[^>]*>Desktop<\/button>/);
 });
 
